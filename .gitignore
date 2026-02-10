@@ -1,0 +1,5 @@
+.pio/
+.vscode/
+**/ .pio/
+**/ .vscode/
+CarClock-ESP8266/src/secrets.cpp
