@@ -133,14 +133,13 @@ byte segs[8][8] =
 // 0xFF = Solid Block
 // 0x20 = Space (32)
 // 0x00-0x07 = Custom Segments (segs[0]-segs[7])
-const byte jumboNums[10][4][4] =
+const byte jumboNums[11][4][4] =
 {
   {{0xFF, 0x00, 0x00, 0xFF},    // 0 : Digit '0'.
    {0xFF, 0x20, 0x20, 0xFF},
    {0xFF, 0x20, 0x20, 0xFF},
    {0xFF, 0x01, 0x01, 0xFF}},
 
-//  {{0x20, 0x20, 0xFF, 0x20},
   {{0x20, 0x01, 0xFF, 0x20},    // 1 : Digit '1'.
    {0x20, 0x20, 0xFF, 0x20},
    {0x20, 0x20, 0xFF, 0x20},
@@ -184,18 +183,24 @@ const byte jumboNums[10][4][4] =
   {{0xFF, 0x00, 0x00, 0xFF},    // 9 : Digit '9'.
    {0xFF, 0x01, 0x01, 0xFF},
    {0x20, 0x20, 0x20, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF}}
+   {0x20, 0x20, 0x20, 0xFF}},
+
+  {{0x01, 0xFF, 0x20, 0x20},    // 10 : Digit '1'.  This is really a 3x4 digit!  The last column is ignored.
+   {0x20, 0xFF, 0x20, 0x20},
+   {0x20, 0xFF, 0x20, 0x20},
+   {0x20, 0xFF, 0x20, 0x20}}
 };
 
 //----------------------------------------------------------------------------
 
-void drawDigit ( int digit, int x )
+void drawDigit ( const int digit, const int x, const int width = 4 )
 {
   for (int row = 0; row < 4; row++)
   {
     lcd.setCursor ( x, row );
 
-    for (int col = 0; col < 4; col++)
+//    for (int col = 0; col < 4; col++)
+    for (int col = 0; col < width; col++)
     {
       lcd.write ( (byte)jumboNums[digit][row][col] );
       delay ( 5 );
@@ -491,14 +496,6 @@ void setup ( void )
 
 
     //
-    //  Setup the ezTime "event" callback :
-    //
-    // setEvent ( cb_TimeSyncEvent );
-//    setSyncEvent ( cb_TimeSyncEvent );          // ezTime.cpp
-//    setSyncProvider ( cb_TimeSyncEvent );       // ezTime.cpp
-
-
-    //
     //  Load our secret information (WiFI SSIDs and passwords, etc) :
     //
     secretsSetup ();
@@ -761,30 +758,21 @@ void loop ( void )
         if (h == 0) h = 12;
 
         //
-        //  Is the hour field is <= 9 ?
+        //  If the time is greater than 9:00, then we want to
+        //  display a narrow '1' (our 3x4 '1') in the first
+        //  three columns :
         //
-        if ( h <= 9 )
+        if ( h > 9 )
         {
-            //
-            //  Only draw the 'ones' digit, and also move it
-            //  to the left one column to give the blinking colon
-            //  more space :
-            //
-            drawDigit ( (h % 10),  4 );
-        }
-        else
-        {
-            //
-            //  Draw both the 'tens' digit and the 'ones' digit
-            //  of the hour field :
-            //
-            drawDigit ( (h / 10),  0 );
-            drawDigit ( (h % 10),  5 );
+            drawDigit ( 10, 0, 3 );     // Hours : Tens unit (Use the thin 3x4 '1' which is jumboNums[10]).
         }
 
-        drawDigit ( (m / 10), 11 );
-        drawDigit ( (m % 10), 16 );
+        drawDigit ( (h % 10),  4 );     // Hours : Ones unit.
+
+        drawDigit ( (m / 10), 11 );     // Minutes : Tens unit.
+        drawDigit ( (m % 10), 16 );     // Minutes : Ones unit.
     } // if
+
 
     //
     //  Flashing colon (runs every second) :
