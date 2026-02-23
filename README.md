@@ -7,7 +7,7 @@ So, I decided to create a real clock that I could use in my car.  The first cloc
 
 ## CarClock-ESP8266
 
-Features :
+<u>Features</u>
 
 2026/02/01 : Ver 1.0 :
 - [Wemos D1 Mini](https://www.wemos.cc/en/latest/d1/d1_mini.html) form factor which I got from [Amazon](https://www.amazon.com/Organizer-ESP8266-Internet-Development-Compatible/dp/B081PX9YFV) a few years ago.
@@ -18,9 +18,9 @@ Features :
 - Preserve time using a [DS3231 I2C RTC (Real Time Clock)](https://www.amazon.com/dp/B07Q7NZTQS).
 - An ASCII "screen" (which mimics the LCD2004) for debugging without requiring a physical LCD2004 to be present.
 
-Notes :
+<u>Notes</u>
 
-- For more information on the features and history, please refer to the comments at the top of src/main.cpp file (I'm old-school and like having comments in the code instead of putting the comments in a separate file such as this README.md file, however I will try to keep the README.md up to date, but no guarantees :-)
+- For more information on the features and history, please refer to the comments at the top of the src/main.cpp file (I'm old-school and like having comments in the code instead of putting the comments in a separate file such as this README.md file, however I will try to keep the README.md up to date, but no guarantees :-)
 
 ## CarClock-ESP32
 
