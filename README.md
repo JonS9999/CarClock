@@ -17,6 +17,7 @@ So, I decided to create a real clock that I could use in my car.  The first cloc
 2026/02/22 : Ver 1.1 & 1.2 :
 - Save/Load time using a [DS3231 I2C RTC (Real Time Clock)](https://www.amazon.com/dp/B07Q7NZTQS).
 - An ASCII "screen" (which mimics the LCD2004) for debugging without requiring a physical LCD2004 to be present.
+- Support OTA (Over The Air) programming.  I find this handy for programming the clock without removing it from the car.
 
 <ins>Notes</ins>
 
@@ -24,6 +25,6 @@ So, I decided to create a real clock that I could use in my car.  The first cloc
 
 ## CarClock-ESP32
 
-Features :
+<ins>Features</ins>
 > I'll fill this section in when I migrate the project from an ESP8266 to an ESP32.
 
