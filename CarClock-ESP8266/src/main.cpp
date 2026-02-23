@@ -1,25 +1,158 @@
+//----------------------------------------------------------------------------
+//
+//  main.cpp
+//
+//      Version 1.2
+//
+//----------------------------------------------------------------------------
+//
+//  History :
+//
+//      Ver 1.2 : 2026/02/20
+//          - Added SerialCommand library to be able to drive the clock
+//            via the serial (USB) port -- Not doing anything with this yet.
+//          - Changed some of the messages that are displayed on the LCD.
+//          - Added an ASCII "screen" to MyDisplay_LCD2004 so we keep a copy
+//            of what is displayed on the LCD.  This way we can test our code
+//            without needing an actual LCD connected to the ESP8266.
+//
+//      Ver 1.1 : 2026/02/15
+//          - Added MyDisplay + MyDisplay_LCD support.
+//          - Added MyRTC support for I2C RTC.
+//          - Added OTA (Over The Air) programming support.
+//          - Minor changes like renaming "secrets.cpp" to "Secrets.cpp",
+//            displaying our IP address when we connect to a WiFi network,
+//            etc...
+//          - Still needs a code cleanup and some refactoring (but I wanted
+//            to get this code checked in as a snapshot of a working clock).
+//
+//      Ver 1.0 : 2026/
+//          - Initial version.
+//          - Simply clock with WiFi + NTP support.
+//
+//----------------------------------------------------------------------------
+//
+//      Hardware
+//
+//        - Wemos D1 Mini (https://www.wemos.cc/en/latest/d1/d1_mini.html)
+//
+//        - LCD2004 20x4 Hitachi-type LCD display.
+//
+//        - I2C devices on our I2C bus :
+//              0x27 : LCD Backpack.
+//              0x57 : AT24Cxxx EEPROM series (on RTC board).
+//              0x68 : DS3231 RTC.
+//
+//----------------------------------------------------------------------------
+//
+//      Future :
+//
+//        - Weather current + forecast information (e.g., pull down weather
+//          info when we connect to a WiFi network).
+//
+//        - MQTT client to display messages.  This could be useful if I use
+//          the clock as a stationary clock in my house -- for example, it
+//          could display 3D printer status messages (M117) when I'm running
+//          my 3D printer.  Or when someone comes to the door and rings the
+//          doorbell (i.e, integrate with my home automation setup).
+//
+//        - Display OTA updating progress on the LCD so we can see what is
+//          happening.
+//
+//        - Maybe a speaker or piezo electric element so it can alert when
+//          the weather turns bad or someone rings the doorbell or when we
+//          successfully connect to a WiFi network and get the time or...
+//
+//        - Possibly configure networks (that we search for) at runtime
+//          instead of at compile time (e.g., get rid of Secrets.cpp).
+//          Maybe use a web interface (WebIotConf perhaps?).
+//
+//        - Possibly attempt to connect to an open network if we cannot
+//          connect to any network in our list of networks (this might
+//          be useful when pulling into a truck stop or some place where
+//          they have free WiFi).
+//
+//        - Push button for control, for example :
+//              - Cycling through screens.
+//              - Display weather current conditions + forecast.
+//              - WiFi information (IP address, subnet mask, etc).
+//              - Force rebooting (if button is held for a long time).
+//              - ...many more things...
+//
+//----------------------------------------------------------------------------
+//
+//      Notes for me :
+//
+//          - Code cleanup.
+//
+//          - Remove unnecessary MyPrintf() lines.
+//
+//          - Refine/Cleanup the m_Display.DisplayMessage3() call.  Try to
+//            make this into a more generic routine.
+//
+//          - Use callbacks (cb_*) for various things.
+//
+//          - Register c_WiFi object with other objects (e.g., pass a
+//            pointer or reference to the object into the setup() routine
+//            of objects that need access to WiFi stuff).  This makes things
+//            less tied-together than they are now (e.g., I could remove the
+//            MyWiFi.* stuff, and everything else would still work).
+//
+//          - Be more creative with the colon?  For example:
+//                  - o : (Big dot) Normal operation / On WiFi.
+//                  - ! : Normal operation / Not on WiFi.
+//                  - * : (Snowflake) Weather warning.
+//
+//          - Implement the things listed in the section above.
+//
+//      Stuff dealing with the 3D printed case :
+//          - Include case STLs in the github repo.
+//          - Modify case to have a cable-hole in the back part of the case.
+//          - Maybe put in one or more holes for push buttons.
+//
+//----------------------------------------------------------------------------
+
+
 //
 //  System include files :
 //
 #include <Arduino.h>
 #include <stdarg.h>         // Required for variable arguments
 #include <ESP8266WiFi.h>    // Wifi for ESP8266.
-#include <ezTime.h>
-#include <Wire.h>
-#include <hd44780.h>
-#include <hd44780ioClass/hd44780_I2Cexp.h> // I2C expander i/o class header
+#include <ezTime.h>         // Timezone stuff.      *** Note that the ezTime library generates some warnings ***
+#include <SerialCommand.h>  // For reading commands from the serial/USB port.
 
 
 //
 //  Local include files :
 //
-#include "config.h"
-#include "MyDebug.h"
-#include "MyNetworkManager.h"
+#include "Common.h"
+#include "MyDisplay.h"              // Display driver (base class).
+#include "MyRTC.h"                  // Real Time Clock (RTC) stuff.
+#include "MyWiFi.h"                 // WiFi/Network stuff.
+#include "MyWiFi_OTA.h"             // WiFi OTA (Over The Air) programming support.
+#include "Secrets.h"                // Where our personal (secret) stuff is defined.
 
+
+//
+//  Things we may want to implement some day :
+//
 #if 0
-#include "MyWebManager.h"
+#include "MyDisplay_TFT"            // Do we want to support a TFT display?
+#include "MyWeather.h"              // Stuff to pull current and future weather information.
+#include "MyWebManager.h"           // Maybe someday implement this...
+#include "MyWiFi_MQTT"              // MQTT client support.
 #endif
+
+
+//
+//  Single instances of some objects :
+//
+//SimpleTimer     g_Timer;        // Timer for sending messages to the MQTT broker.
+cMyDisplay      g_Display;      // One instance of the display object.
+cMyRTC          g_RTC;          // One instance of the Real Time Clock (RTC) object.
+cMyWiFi         g_WiFi;         // One instance of the WiFi object.
+SerialCommand   g_SerialCmd;    // Serial port command line interface.
 
 
 //
@@ -29,362 +162,16 @@ tSystemConfig    config;
 
 
 //
-//  Initialize LCD (0x27 is common, some backpacks use 0x3F) :
+//  Used to determine timezone and thus calculate the correct local time :
 //
-const int LCD_I2C_ADDR  = 0x27;             // Address of the "I2C backpack" on the LCD.
-const int LCD_I2C_SDA   = D2;
-const int LCD_I2C_SCL   = D1;
-const int LCD_COLS      = 20;               // 20 column display.
-const int LCD_ROWS      = 4;                // 4 row display.
-
-// Create the LCD object
-hd44780_I2Cexp lcd;
-
 Timezone myTZ;
-
-//----------------------------------------------------------------------------
-
-// --- 4-Line Custom Segments ---
-// Kept in the segs[8][8] format as requested.
-byte segs[8][8] =
-{
-  // 0x00 : Top bar - thick
-  {0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00},   // .....
-
-   // 0x01 : Bottom bar - thick
-  {0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F},   // xxxxx
-
-   // 0x02 : Top half of colon (:) :  *** Not used ***
-  {0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x18,    // xx...
-   0x18,    // xx...
-   0x00},   // .....
-
-   // 0x03 : Bottom half of colon (:) :  *** Not used ***
-  {0x00,    // .....
-   0x18,    // xx...
-   0x18,    // xx...
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00},   // .....
-
-   // 0x04 : *** Not used ***
-  {0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F},   // xxxxx
-
-   // 0x05 : *** Not used ***
-  {0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x1F,    // xxxxx
-   0x1F},   // xxxxx
-
-   // 0x06 : *** Not used ***
-  {0x00,    // .....
-   0x00,    // .....
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x1F,    // xxxxx
-   0x00,    // .....
-   0x00},   // .....
-
-   // 0x07 : *** Not used ***
-  {0x1F,
-   0x1F,
-   0x1F,
-   0x1F,
-   0x1F,
-   0x1F,
-   0x1F,
-   0x1F}
-};
-
-// [Digit 0-9][Row 0-3][Col 0-3]
-// 0xFF = Solid Block
-// 0x20 = Space (32)
-// 0x00-0x07 = Custom Segments (segs[0]-segs[7])
-const byte jumboNums[11][4][4] =
-{
-  {{0xFF, 0x00, 0x00, 0xFF},    // 0 : Digit '0'.
-   {0xFF, 0x20, 0x20, 0xFF},
-   {0xFF, 0x20, 0x20, 0xFF},
-   {0xFF, 0x01, 0x01, 0xFF}},
-
-  {{0x20, 0x01, 0xFF, 0x20},    // 1 : Digit '1'.
-   {0x20, 0x20, 0xFF, 0x20},
-   {0x20, 0x20, 0xFF, 0x20},
-   {0x20, 0x20, 0xFF, 0x20}},
-
-  {{0x00, 0x00, 0x00, 0xFF},    // 2 : Digit '2'.
-   {0x01, 0x01, 0x01, 0xFF},
-   {0xFF, 0x20, 0x20, 0x20},
-   {0xFF, 0x01, 0x01, 0x01}},
-
-  {{0x00, 0x00, 0x00, 0xFF},    // 3 : Digit '3'.
-   {0x20, 0x01, 0x01, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF},
-   {0x01, 0x01, 0x01, 0xFF}},
-
-  {{0xFF, 0x20, 0x20, 0xFF},    // 4 : Digit '4'.
-   {0xFF, 0x01, 0x01, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF}},
-
-  {{0xFF, 0x00, 0x00, 0x00},    // 5 : Digit '5'.
-   {0xFF, 0x01, 0x01, 0x01},
-   {0x20, 0x20, 0x20, 0xFF},
-   {0x01, 0x01, 0x01, 0xFF}},
-
-  {{0xFF, 0x00, 0x00, 0x00},    // 6 : Digit '6'.
-   {0xFF, 0x01, 0x01, 0x01},
-   {0xFF, 0x20, 0x20, 0xFF},
-   {0xFF, 0x01, 0x01, 0xFF}},
-
-  {{0x00, 0x00, 0x00, 0xFF},    // 7 : Digit '7'.
-   {0x20, 0x20, 0x20, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF}},
-
-  {{0xFF, 0x00, 0x00, 0xFF},    // 8 : Digit '8'.
-   {0xFF, 0x01, 0x01, 0xFF},
-   {0xFF, 0x20, 0x20, 0xFF},
-   {0xFF, 0x01, 0x01, 0xFF}},
-
-  {{0xFF, 0x00, 0x00, 0xFF},    // 9 : Digit '9'.
-   {0xFF, 0x01, 0x01, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF},
-   {0x20, 0x20, 0x20, 0xFF}},
-
-  {{0x01, 0xFF, 0x20, 0x20},    // 10 : Digit '1'.  This is really a 3x4 digit!  The last column is ignored.
-   {0x20, 0xFF, 0x20, 0x20},
-   {0x20, 0xFF, 0x20, 0x20},
-   {0x20, 0xFF, 0x20, 0x20}}
-};
-
-//----------------------------------------------------------------------------
-
-void drawDigit ( const int digit, const int x, const int width = 4 )
-{
-  for (int row = 0; row < 4; row++)
-  {
-    lcd.setCursor ( x, row );
-
-//    for (int col = 0; col < 4; col++)
-    for (int col = 0; col < width; col++)
-    {
-      lcd.write ( (byte)jumboNums[digit][row][col] );
-      delay ( 5 );
-    }
-  }
-}
-
-//----------------------------------------------------------------------------
-
-void debugRoutine01 ( void )
-{
-    MyPrintf ( "--- debugRoutine01 called ---\n" );
-
-    while ( 1 )
-    {
-        for (int i = 0; i <= 9; i++)
-        {
-            MyPrintf ( "- Digit %d.\n", i );
-
-            lcd.clear();
-
-            // Reference digit
-            lcd.setCursor(10, 0);
-            lcd.print(i);
-
-            // Draw 4 copies
-            drawDigit(i, 0);
-            drawDigit(i, 5);
-
-            // Spacer for colon will be at 10
-            drawDigit(i, 11);
-            drawDigit(i, 16);
-
-            delay(1000);
-        } // for
-
-  #if 0
-        for (int i = 0; i <= 9; i++)
-        {
-            lcd.clear();
-            lcd.setCursor(0, 0);
-
-            MyPrintf ( "- Digit %d.\n", i );
-
-            //  Four copies of the big digit
-            drawDigit ( i,  2 );    // Position 1
-            drawDigit ( i,  6 );    // Position 2
-            drawDigit ( i, 11 );    // Position 3
-            drawDigit ( i, 15 );    // Position 4
-
-#if 0   // Don't bother -- it messes up the big digits.
-            //  Small reference digit in the corner
-            lcd.setCursor(0, 0);
-            lcd.print(i);
-#endif
-
-            //  Wait and loop
-            delay ( 2000 );
-        } // for
-#endif
-
-    } // while
-}
-
-//----------------------------------------------------------------------------
-
-void debugRoutine02 ( void )
-{
-    //
-    //  Local variables :
-    //
-    char        ch;
-    // char        buf[100];
-    bool        automaticMode   = true;
-    bool        forceIt         = false;
-    int         digit           = 0;
-    int         oldDigit        = -1;
-    long unsigned int  timeout  = 0;
-
-
-    MyPrintf ( "--- debugRoutine02 called ---\n" );
-
-    lcd.clear ();
-    lcd.setCursor ( 0, 0 );
-    delay ( 100 );
-    lcd.print ( "+ debugRoutine02 +" );
-    delay ( 3000 );
-    lcd.clear ();
-
-    while ( 1 )
-    {
-        //
-        //  Do we have serial input ?
-        //
-        if ( Serial.available() > 0 )
-        {
-            ch = Serial.read();
-            MyPrintf ( "- Read character [%c].\n", ch );
-
-            switch ( ch )
-            {
-                case 'a' :
-                    MyPrintf ( "- Enabling automatic mode.\n" );
-                    automaticMode = true;
-                    forceIt = true;
-                    break;
-
-                default :
-                    if ( (ch >= '0') && (ch <= '9') )
-                    {
-                        MyPrintf ( "- Manual digit '%c'.\n", ch );
-                        digit = ( ch - '0' );
-                        automaticMode = false;
-                        forceIt = true;
-                    }
-                    break;
-            } // switch
-        } // if
-
-
-        //
-        //  Are we supposed to display something ?
-        //
-        if ( (forceIt == true) || (oldDigit != digit) )
-        {
-            MyPrintf ( "%c Digit %d.\n",
-                ( (automaticMode == true) ? '*' : '-' ),
-                digit );
-
-            // Reference digit
-            lcd.clear();
-            delay ( 10 );
-
-            lcd.setCursor ( 0, 0 );
-            delay ( 10 );
-
-            // Draw 4 copies
-#if 0   // Enable to display a small version of the number we are displaying.
-            snprintf ( buf, sizeof(buf), "%d", digit );
-            lcd.print ( buf );
-            delay ( 100 );
-#else
-            drawDigit ( digit, 0 );
-#endif
-            drawDigit ( digit, 5 );
-
-            // Spacer for colon will be at 10
-            drawDigit ( digit, 11 );
-            drawDigit ( digit, 16 );
-        }
-
-        //
-        //  Update some things...
-        //
-        oldDigit = digit;
-        forceIt  = false;
-
-        //
-        //  If we are in automatic mode, then :
-        //      - Advance to the next digit.
-        //      - Sleep for a bit.
-        //
-        if ( automaticMode == true )
-        {
-            digit = ( (digit + 1) % 10 );
-
-            //
-            //  Delay (sleep) for 1 second, but allow the keyboard
-            //  to interrupt us :
-            //
-            timeout = ( millis() + 1000 );
-            while ( (millis() <= timeout) && (Serial.available() == 0) )
-            {
-                delay ( 10 );
-            }
-        } // if
-
-    } // while
-}
 
 
 //----------------------------------------------------------------------------
 //
 //  cb_TimeSyncEvent () -- Callback which is called by ezTime library.
+//
+//      *** NOT CURRENTLY USED ***
 //
 //----------------------------------------------------------------------------
 
@@ -397,7 +184,7 @@ void cb_TimeSyncEvent ()
 
 
     switch ( status )
-{
+    {
         case timeSet :          // Value: 2
             MyPrintf ( "[cb_TimeSyncEvent]  NTP Sync Successful!\n" );
             break;
@@ -419,6 +206,26 @@ void cb_TimeSyncEvent ()
 
 //----------------------------------------------------------------------------
 //
+//  cb_WiFi_Connecting () -- WiFi callback which is called when the WiFi
+//                           module attempts to connect to an access opint.
+//
+//----------------------------------------------------------------------------
+
+void cb_WiFi_Connecting ( const char* ssid )
+{
+    MyPrintf ( "[cb_WiFi_Connecting]  ------------------------------------------\n" );
+    MyPrintf ( "[cb_WiFi_Connecting]  Called : AP = [%s].\n", ssid );
+
+    //                          "--------------------"
+    g_Display.DisplayMessage3 ( "Connecting to...",         // Row 0.
+                                "",                         // Row 1.
+                                ssid,                       // Row 2.
+                                false );                    // Do not force SSID to the bottom row.
+}
+
+
+//----------------------------------------------------------------------------
+//
 //  setup ()
 //
 //----------------------------------------------------------------------------
@@ -428,32 +235,72 @@ void setup ( void )
     //
     //  Local variables :
     //
-    int     status;
+    //char    buf[30];
 
 
-    Serial.begin(115200);
+    Serial.begin ( 115200 );
     delay ( 2000 );
 
     Serial.println ( "\n\n\n" );
     MyPrintf ( "=== %s ===\n", __FILE__ );
     MyPrintf ( "Built %s at %s.\n", __DATE__, __TIME__ );
 
-    MyPrintf ( "LED_BUILTIN pin = %d.\n", LED_BUILTIN );
-    MyPrintf ( "LCD I2C SCL pin = %d.\n", LCD_I2C_SCL );
-    MyPrintf ( "LCD I2C SDA pin = %d.\n", LCD_I2C_SDA );
-    MyPrintf ( "LCD I2C address = 0x%02x.\n", LCD_I2C_ADDR );
-
 
     //
     //  Status (heartbeat) LED :
     //
     pinMode ( LED_BUILTIN, OUTPUT );
-    for ( int i = 0 ; i < 6 ; i++ )
+
+#if 1   // DEBUG HACK
+    //
+    //  Let's blink the built-in LED a few times to show that
+    //  we are alive :
+    //
+    for ( int i = 0 ; i < 3 ; i++ )
     {
         digitalWrite ( LED_BUILTIN, HIGH );
         delay ( 100 );
         digitalWrite ( LED_BUILTIN, LOW );
         delay ( 100 );
+    }
+#endif
+
+
+    //
+    //  Initialize our display object :
+    //
+    g_Display.setup ();
+    g_Display.SetObjectSerialCmd ( &g_SerialCmd );
+    g_Display.DisplaySplashScreen ();
+
+
+    //
+    //  Initialize our RTC (Real Time Clock) object :
+    //
+    g_RTC.setup ();
+
+
+    //
+    //  Were we successful in initializing the RTC ?
+    //
+    if ( g_RTC.IsInitialized() == true )
+    {
+        //
+        //  Set our system time from the time stored in the RTC :
+        //
+        g_RTC.SetSystemTimeFromRTC ();
+    }
+    else
+    {
+        MyPrintf ( "[setup]  *** Unable to initialize the RTC -- Ignoring future RTC operations ***\n" );
+
+        //                          "--------------------"
+        g_Display.DisplayMessage3 ( g_WiFi.MyHostname(),
+                                    "",
+                                    "* Cannot find RTC *",
+                                    false );
+
+        delay ( 2000 );
     }
 
 
@@ -464,53 +311,35 @@ void setup ( void )
 
 
     //
-    //  Initialize the LCD with 20 cols, 4 rows
-    //  This function performs the auto-configuration that the Diag tool did
+    //  Initialize our WiFi object :
     //
-    status = lcd.begin ( 20, 4 );
-
-    if ( status )
-    {
-        // If status is non-zero, it couldn't find/config the LCD
-        Serial.printf("LCD initialization failed with status: %d\n", status);
-    }
-
-    lcd.backlight();
-    lcd.clear();
-
-    // Load Custom Characters
-    for ( int i = 0 ; i < 8 ; i++ )
-    {
-        lcd.createChar(i, segs[i]);
-    }
-
-
-#if 0  // Enable debug routine -- DEBUG HACK
-//    debugRoutine01 ();
-    debugRoutine02 ();
-#endif  // Enable debug routine.
-
-
-    lcd.setCursor ( 0, 0 );
-    lcd.print ( "Initializing..." );
+    g_WiFi.setup ();
+    g_WiFi.SetCallbackConnecting ( cb_WiFi_Connecting );
 
 
     //
-    //  Load our secret information (WiFI SSIDs and passwords, etc) :
+    //  Load our personal info (WiFI SSIDs and passwords) from Secrets.cpp
+    //  and also setup our default timezone :
     //
-    secretsSetup ();
+    SecretsSetup ();
+
+    MyPrintf ( "[setup]  Defaulting to timezone '%s'.\n", MY_TIMEZONE );
+    myTZ.setPosix ( MY_TIMEZONE );              // Defined in Secrets.cpp
 
 
     //
-    //  Clear the LCD :
+    //  Clear the display :
     //
-    lcd.clear();
-    delay ( 20 );
+    g_Display.ClearScreen ();
+
+
+#if 0   // RTC stuff -- DEBUG HACK
+    g_RTC.Debug_Test_001 ();
+#endif
 
 
     MyPrintf ( "Running...\n" );
     MyPrintf ( "-----------------------------\n" );
-
 }
 
 //----------------------------------------------------------------------------
@@ -522,26 +351,44 @@ void loop ( void )
     //
     bool            success;
     bool            forceDisplayUpdate  = false;
-    char            c1;
-    char            c2;
+    bool            displayWiFiInfo     = false;            // Set to 'true' if we connect to a new WiFi network.
     int             h;
     int             m;
     int             curMin              = minute();
-    int             curTzMin            = myTZ.minute();
-    int             curTzHour           = myTZ.hour();
+    int             curTzHour           = 0;
+    int             curTzMin            = 0;
+    int             curTzSec            = 0;
     uint32_t        curMillis           = millis();
     time_t          newNtpUpdateTime;
     time_t          oldNtpUpdateTime;
-    static bool     s_ColonState        = false;
     static int      s_NumGetTimeRetries = 0;
     static int      s_NumWiFiRetries    = 0;
     static int      s_LastMin           = -1;
     static uint32_t s_LastMillis        = 0;
     static uint32_t s_NextWiFiTry       = 0;
     static uint32_t s_NextTimeFetch     = 0;
+    static uint32_t s_NextRtcSetTime    = 0;
+    static String   s_LastWiFiIPAddr    = "";
+    static String   s_LastWiFiSSID      = "";
 
 
-    events();               // exTime.cpp -- ezTime background tasks
+    //
+    //  Is this the first time we're being called ?
+    //
+    if ( g_FirstTime == true )
+    {
+        MyPrintf ( "[Loop]  =========================================\n" );
+        MyPrintf ( "[Loop]  Main loop is running.\n" );
+    }
+
+
+    //
+    //  Handle events and such :
+    //
+    events();                       // ezTime.cpp -- ezTime background tasks
+    g_Display.handle ();            // Display driver.
+    g_RTC.handle ();                // RTC (Real Time Clock) driver.
+    g_WiFi.handle ();               // WiFi driver.
 
 
     //---------------------------------------------------------------
@@ -554,35 +401,49 @@ void loop ( void )
     {
         MyPrintf ( "[Loop]  Trying to connect to a WiFi network...\n" );
 
-        lcd.clear ();
-        delay ( 20 );
+#if 0   // OLD CODE
+        //                          "--------------------"
+        g_Display.DisplayMessage3 ( "Attempting to",
+                                    "connect to WiFi...",
+                                    "Please wait." );
+#endif  // OLD CODE
 
-        //          "--------------------"
-        lcd.setCursor ( 0, 0 );
-        lcd.print ( "Attempting to" );
-        delay ( 20 );
-
-        lcd.setCursor ( 0, 1 );
-        lcd.print ( "connect to WiFi..." );
-        delay ( 20 );
-
-        lcd.setCursor ( 0, 3 );
-        lcd.print ( "Please wait..." );
-        delay ( 20 );
+        //                          "--------------------"
+        g_Display.DisplayMessage3 ( "Searching for",
+                                    "WiFi networks...",
+                                    "Please wait." );
 
         //
         //  Use our own semi-fancy WiFi manager :
         //
-        success = connectWifi ();
+        success = g_WiFi.Connect ();
 
-        lcd.clear ();
-        delay ( 20 );
+        g_Display.ClearScreen ();
 
         //
         //  If successful, then force us to get the time now :
         //
         if ( success == true )
         {
+            //
+            //  Determine if we've connected to a new WiFi network :
+            //
+            if ( (s_LastWiFiIPAddr != WiFi.localIP().toString() ) ||
+                 (s_LastWiFiSSID   != WiFi.SSID()) )
+            {
+                s_LastWiFiIPAddr = WiFi.localIP().toString();
+                s_LastWiFiSSID   = WiFi.SSID();
+
+                MyPrintf ( "[Loop]  Connected to a new WiFi network [%s] (%s).\n",
+                    s_LastWiFiSSID.c_str(),
+                    s_LastWiFiIPAddr.c_str() );
+
+                //
+                //  Set the flag to show the extended WiFi info :
+                //
+                displayWiFiInfo = true;
+            }
+
             MyPrintf ( "[Loop]  Connected.  We need to get the time...\n" );
 
             //
@@ -591,17 +452,20 @@ void loop ( void )
             s_NumWiFiRetries = 0;
 
             //
-            //  Display some stuff on the LCD display :
+            //  Should we show the extended WiFi information ?
             //
-            lcd.setCursor ( 0, 0 );
-            lcd.print ( "Connected to WiFi:" );
-            delay ( 20 );
+            if ( displayWiFiInfo == true )
+            {
+                //
+                //  Display some WiFi information on the LCD display :
+                //
+                //                          "--------------------"
+                g_Display.DisplayMessage3 ( "Connected to WiFi:",
+                                            WiFi.SSID().c_str(),
+                                            WiFi.localIP().toString().c_str() );
 
-            lcd.setCursor ( 0, 1 );
-            lcd.print ( WiFi.SSID().c_str() );
-            delay ( 20 );
-
-            delay ( 1000 );
+                delay ( 4000 );
+            }
 
             //
             //  We can set s_NextWiFiTry to 0 so if our current WiFi
@@ -617,6 +481,12 @@ void loop ( void )
         else
         {
             MyPrintf ( "[Loop]  WiFi connection failed.\n" );
+
+            //
+            //  Clear the "last WiFi connectd to" info :
+            //
+            s_LastWiFiIPAddr = "";
+            s_LastWiFiSSID   = "";
 
             //
             //  Increment the number of WiFi connect retries :
@@ -654,31 +524,24 @@ void loop ( void )
     {
         MyPrintf ( "[Loop]  Trying to get the time...\n" );
 
-        lcd.clear ();
-        delay ( 20 );
+        //                          "--------------------"
+        g_Display.DisplayMessage3 ( "Connected to WiFi:",
+                                     WiFi.SSID().c_str(),
+                                     "Getting the time..." );
 
-        lcd.setCursor ( 0, 0 );
-        lcd.print ( "Connected to WiFi:" );
-        delay ( 20 );
-
-        lcd.setCursor ( 0, 1 );
-        lcd.print ( WiFi.SSID().c_str() );
-        delay ( 20 );
-
-        lcd.setCursor ( 0, 3 );
-        lcd.print ( "Getting the time..." );
-        delay ( 20 );
 
         // waitForSync();                              // ezTime.cpp
 //        waitForSync ( 15 );     // ezTime.cpp : Increase timeout to 15 seconds for cellular
-        waitForSync ( 8 );     // ezTime.cpp : Increase timeout to 15 seconds for cellular
+        waitForSync ( 8 );     // ezTime.cpp : Increase timeout to 8 seconds for cellular
 
         if ( timeStatus() != timeSet )
         {
             MyPrintf ( "[Loop]  NTP Sync Failed - trying using updateNTP()...\n" );
             oldNtpUpdateTime = lastNtpUpdateTime();
             MyPrintf ( "[Loop]  Last NTP date was at %d.\n", (int)oldNtpUpdateTime );
+
             updateNTP();
+
             newNtpUpdateTime = lastNtpUpdateTime();
             MyPrintf ( "[Loop]  New  NTP date was at %d.\n", (int)newNtpUpdateTime );
 
@@ -692,22 +555,31 @@ void loop ( void )
             {
                 MyPrintf ( "[Loop]  Hey, it looks like our NTP request succeeded!\n" );
                 s_NumGetTimeRetries = 0;
+
+                //
+                //  Wait a few seconds before we try to set the time in the
+                //  RTC (we need to give NTP time to set our system clock) :
+                //
+                s_NextRtcSetTime = ( curMillis + 5000 );
             }
         }
         else
         {
             MyPrintf ( "[Loop]  waitForSync() time request succeeded.\n" );
             s_NumGetTimeRetries = 0;
-        }
 
-        myTZ.setLocation ( "America/Chicago" );
+            //
+            //  Wait a few seconds before we try to set the time in the
+            //  RTC (we need to give NTP time to set our system clock) :
+            //
+            s_NextRtcSetTime = ( curMillis + 5000 );
+        }
 
         MyPrintf ( "[Loop]  Time synced: [%s]\n", myTZ.dateTime().c_str() );
 
         MyPrintf ( "[Loop]  Continuing...\n" );
 
-        lcd.clear ();
-        delay ( 20 );
+        g_Display.ClearScreen ();
 
         //
         //  Try to get the time again based on how many time we've
@@ -718,8 +590,8 @@ void loop ( void )
         //
         if ( (s_NumGetTimeRetries > 0) && (s_NumGetTimeRetries < 10) )
         {
-            MyPrintf ( "[Loop]  Will try to get the time again in %d seconds.\n", 60 );
-            s_NextTimeFetch = ( curMillis + SECS_TO_MSECS(60) );      // Try to get the time every 60 seconds.
+            MyPrintf ( "[Loop]  Will try to get the time again in %d seconds.\n", 30 );
+            s_NextTimeFetch = ( curMillis + SECS_TO_MSECS(30) );      // Try to get the time every 30 seconds.
         }
         else
         {
@@ -741,84 +613,106 @@ void loop ( void )
     //
     //---------------------------------------------------------------
 
+    curTzHour   = myTZ.hour();
+    curTzMin    = myTZ.minute();
+    curTzSec    = myTZ.second();
+
     if ( (forceDisplayUpdate == true) || (curMin != s_LastMin) )
     {
-        lcd.clear ();
-        delay ( 10 );
-
         s_LastMin = curMin;
+
+        //
+        //  Do some sanity checking on the time fields -- we need to
+        //  do this if we don't have an RTC connected to us :
+        //
+        curTzHour = ( curTzHour % 24 );         // 0..23.
+        curTzMin  = ( curTzMin  % 60 );         // 0..59.
+        curTzSec  = ( curTzSec  % 60 );         // 0..59
 
         h = curTzHour;
         m = curTzMin;
 
-        MyPrintf ( "  %s.\n", myTZ.dateTime("D, M j Y  g:i a").c_str() );
+        MyPrintf ( "[Loop]  Time = %s.\n", myTZ.dateTime("D, M j Y  g:i a").c_str() );
 
         // 12-hour format conversion
-        if (h > 12) h -= 12;
-        if (h == 0) h = 12;
+        if ( h > 12 ) h -= 12;
+        if ( h == 0 ) h = 12;
 
         //
-        //  If the time is greater than 9:00, then we want to
-        //  display a narrow '1' (our 3x4 '1') in the first
-        //  three columns :
+        //  Now display the time on our display :
         //
-        if ( h > 9 )
-        {
-            drawDigit ( 10, 0, 3 );     // Hours : Tens unit (Use the thin 3x4 '1' which is jumboNums[10]).
-        }
+        g_Display.DisplayTime ( h, m, curTzSec );
 
-        drawDigit ( (h % 10),  4 );     // Hours : Ones unit.
-
-        drawDigit ( (m / 10), 11 );     // Minutes : Tens unit.
-        drawDigit ( (m % 10), 16 );     // Minutes : Ones unit.
     } // if
 
 
+    //---------------------------------------------------------------
     //
-    //  Flashing colon (runs every second) :
+    //  Should we update the time in the RTC ?
     //
-    if ( (curMillis - s_LastMillis) >= 1000 )
+    //---------------------------------------------------------------
+
+    if ( g_RTC.IsInitialized() == true )
     {
-        s_LastMillis = curMillis;
-
-        s_ColonState = !s_ColonState;
-
-        //
-        //  Decide which type of colon to use :
-        //
-        //      ' ' : No colon.
-        //       *  : Colon on -- WiFi connected.
-        //       !  : Colon on -- WiFi not connected.
-        //
-        c1 = ' ';       // Left part of colon.
-        c2 = ' ';       // Right part of colon.
-
-        if ( s_ColonState == true )
+        if ( (s_NextRtcSetTime != 0) && (curMillis >= s_NextRtcSetTime) )
         {
+            MyPrintf ( "[Loop]  Time to set the time in the RTC...\n" );
+
             //
-            //  We print something, so if we are connected, then
-            //  we will print '*'.  If we are not connected, then
-            //  we will print '!!' (two '!').
+            //  Try to update the time in the RTC.  Note that if our system
+            //  time is not valid (e.g., we haven't yet been able to get the
+            //  current time from an NTP server), the SetRTCFromSystemTime()
+            //  call will return 'false'.  In that event, we will try to set
+            //  the RTC time again in 5 seconds :
             //
-            if ( WiFi.status() == WL_CONNECTED )
+            if ( g_RTC.SetRTCFromSystemTime() == false )
             {
-                c1 = '*';
+                MyPrintf ( "[Loop]  +++ Warning -- Unable to set RTC time / Will try again later +++\n" );
+
+                //
+                //  Try to set the time again in 5 seconds :
+                //
+                s_NextRtcSetTime = ( curMillis + 5000 );
             }
             else
             {
-                c1 = '!';
-                c2 = '!';
+                MyPrintf ( "[Loop]  We have successfully set the RTC time.\n" );
+
+                //
+                //  Set this to 0 to indicate the RTC has been updated :
+                //
+                s_NextRtcSetTime = 0;
             }
         }
+    }
 
-        digitalWrite ( LED_BUILTIN, ( (c1 == ' ') ? HIGH : LOW ) );
 
-        lcd.setCursor ( 9, 1 );
-        lcd.print ( c1 );
-        lcd.print ( c2 );
+    //---------------------------------------------------------------
+    //
+    //  Toggle the built-in LED every second :
+    //
+    //---------------------------------------------------------------
 
-        lcd.setCursor ( 9, 2 );
-        lcd.print ( c1 );
-        lcd.print ( c2 );
-    } // if
+    if ( (curMillis - s_LastMillis) >= 1000 )
+    {
+        digitalWrite ( LED_BUILTIN, ( ( ( (curMillis / 1000) % 2)  == 0 ) ? HIGH : LOW ) );
+
+        s_LastMillis = curMillis;
+    }
+
+
+    //---------------------------------------------------------------
+    //
+    //  Clear our global "first time" flag since we've run this loop once :
+    //
+    //---------------------------------------------------------------
+
+    g_FirstTime = false;
 }
+
+
+//----------------------------------------------------------------------------
+//
+//  end of  main.cpp
+//
+//----------------------------------------------------------------------------

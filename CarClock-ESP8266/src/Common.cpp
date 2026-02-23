@@ -7,15 +7,32 @@
 //
 //  Local include files :
 //
-#include "MyDebug.h"
-#include "config.h"
-// #include "MyNetworkManager.h"
+#include "Common.h"
+#include "MyWiFi.h"
 
+
+//-----------------------------------------------------------------------------
+//
+//  Global variables :
+//
+//-----------------------------------------------------------------------------
+
+bool      g_FirstTime         = true;               // Used to indicate the first time we're going through the main loop.
+
+time_t    g_RefreshTimeSecs   = 0L;
 
 static unsigned long lastMinuteReport = 0;
-static bool virtualApButtonActive = false; // The internal "latched" state
+
+static bool virtualApButtonActive = false;  // The internal "latched" state
+
+//cMyWiFi     g_WiFi;                         // One instance of the WiFi object.
 
 
+//----------------------------------------------------------------------------
+//
+//  MyPrintf ( const char* format, ... )
+//
+//----------------------------------------------------------------------------
 
 void MyPrintf ( const char* format, ... )
 {
@@ -30,17 +47,53 @@ void MyPrintf ( const char* format, ... )
     char buffer[256]; // Adjust size if you plan on printing very long strings
     va_list args;
 
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
+    va_start ( args, format );
+    vsnprintf ( buffer, sizeof(buffer), format, args );
+    va_end ( args );
 
     // 3. Output the formatted string
-    Serial.print(timestamp);
-    Serial.print(buffer);
+    Serial.print ( timestamp );
+    Serial.print ( buffer );
 
     // Optional: Force a newline if you want every MyPrintf to be its own line
     // Serial.println();
 }
+
+
+//----------------------------------------------------------------------------
+//
+//  MyPrintf ( const __FlashStringHelper* format, ... )
+//
+//----------------------------------------------------------------------------
+
+void MyPrintf ( const __FlashStringHelper* format, ... )
+{
+    // 1. Create the timestamp prefix [mm/dd/yy hh:mm:ss]
+    // ezTime format: "m/d/y H:i:s"
+    // "g:i:s A" -> 3:15:02 PM (g is hour, i is minute, s is second, A is AM/PM)
+    // If time isn't set yet, it will show [01/01/70 00:00:00]
+    String timestamp = "[" + myTZ.dateTime("m/d/Y g:i:s A") + "]  ";
+//    String timestamp = "[" + myTZ.dateTime("m/d/y H:i:s") + "]  ";
+
+    // 2. Handle the variable arguments
+    char buffer[256]; // Adjust size if you plan on printing very long strings
+    va_list args;
+
+    va_start ( args, (const char*)format );
+    vsnprintf ( buffer, sizeof(buffer), (const char*)format, args );
+    va_end ( args );
+
+    // 3. Output the formatted string
+    Serial.print ( timestamp );
+    Serial.print ( buffer );
+
+    // Optional: Force a newline if you want every MyPrintf to be its own line
+    // Serial.println();
+}
+
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 
 
 void MyDebug_MinuteReport ( bool forceUpdate )

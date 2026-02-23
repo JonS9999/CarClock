@@ -1,0 +1,248 @@
+//----------------------------------------------------------------------------
+//
+//  MyDisplay_LCD2004.h
+//
+//    Low level display driver for the Hitachi 20x4 LCD display.
+//
+//    Jon Scheer (2026)
+//
+//    Rev 1.1
+//
+//----------------------------------------------------------------------------
+
+#ifndef _MY_DISPLAY_LCD2004_H_
+#define _MY_DISPLAY_LCD2004_H_
+
+
+//
+//  System include files :
+//
+#include <Arduino.h>
+#include <Wire.h>
+#include <hd44780.h>
+#include <hd44780ioClass/hd44780_I2Cexp.h>  // I2C expander I/O class header.
+#include <SerialCommand.h>                  // Serial/USB port command line interface.
+
+
+//
+//  Local include files :
+//
+#include "Common.h"
+#include "MyDisplay.h"              // Generic display.
+
+
+//-----------------------------------------------------------------------------
+//
+//  Global constants
+//
+//-----------------------------------------------------------------------------
+
+const uint8_t   LCD2004_COLS    = (20);
+const uint8_t   LCD2004_ROWS    = (4);
+
+
+//-----------------------------------------------------------------------------
+//
+//  cMyDisplay_LCD2004 object
+//
+//-----------------------------------------------------------------------------
+
+class cMyDisplay_LCD2004
+{
+  private :
+
+    //
+    //  m_IsInitialized -- Flag used track if we've been initialized yet or not.
+    //
+    bool  m_IsInitialized;
+
+    //
+    //  m_LcdIsPresent -- Flag used to determine if we have a display connected
+    //                    to us (it's okay if we don't as we may be just using
+    //                    a standalone ESP8266 with a serial/USB port).
+    //
+    bool  m_LcdIsPresent;
+
+    //
+    //  m_SerialCmd -- Pointer to an optional SerialCommand object.
+    //
+    SerialCommand *m_pSerialCmd;
+
+    //
+    //  m_DisplayingTime -- Flag used to determine if we are displaying the time.
+    //
+    bool  m_DisplayingTime;
+
+    //
+    //  m_Seconds : We need to keep track of the seconds since the main loop
+    //              only calls DisplayTime() once a minute.
+    //
+    uint8_t m_Seconds;
+
+
+    //
+    //  m_SecondsUpdateTime : The time we need to update m_Seconds.
+    //
+    uint32_t m_SecondsUpdateAt;
+
+
+    //
+    //  m_LCD : One instance of the LCD2004 object.
+    //
+    hd44780_I2Cexp m_LCD;
+
+
+    //
+    //  Character array that mimics what we've written to the LCD :
+    //
+    uint8_t m_TextScreen[LCD2004_ROWS][LCD2004_COLS];
+
+
+    //
+    //  Cursor position attributes for indexing into m_LCD_Screen[][]
+    //  (column and row) :
+    //
+    uint8_t m_TextScreen_Posi_Col;
+    uint8_t m_TextScreen_Posi_Row;
+
+
+    //
+    //  VT100 emulation mode?
+    //
+    bool m_VT100_Emulation;
+
+
+    //
+    //  Display_Seconds () -- Display the seconds on the LCD :
+    //
+    void DisplaySeconds ( const int seconds );
+
+    //
+    //  TextScreen_ClearScreen () -- Clear our text "screen" :
+    //
+    void TextScreen_ClearScreen ( void );
+
+    //
+    //  TextScreen_Display () -- Display our "screen" to the serial port :
+    //
+    void TextScreen_Display ( void );
+
+    //
+    //  TextScreen_DisplayChar () -- Display a character (that is in
+    //                               our text "screen") to the serial
+    //                               port.
+    //
+    void TextScreen_DisplayChar ( const byte ch );
+
+
+    //-----------------------------------------------------------------
+
+  protected :
+
+    //
+    //  Routine to draw a big digit on the LCD :
+    //
+    void DrawDigit ( const int digit, const int x, const int width = 4 );
+
+
+    //-----------------------------------------------------------------
+
+  public :
+
+    //
+    //  Constructor :
+    //
+    cMyDisplay_LCD2004 ( void );
+
+    //
+    //  ClearScreen () -- Routine to clear the display :
+    //
+    void ClearScreen ( void );
+
+    //
+    //  DisplaySplashScreen () -- Display our splash (initial) screen :
+    //
+    void DisplaySplashScreen ( void );
+
+    //
+    //  DisplayMessage2 () -- Display the user specified messages on our LCD :
+    //
+    void DisplayMessage2 (  const char* MesgPart1,
+                            const char* MesgPart2 = nullptr );
+
+    //
+    //  DisplayMessage3 () -- Display the user specified messages on our display :
+    //
+    void DisplayMessage3 (  const char* MesgPart1,
+                            const char* MesgPart2     = nullptr,
+                            const char* MesgPart3     = nullptr,
+                            const bool  ForceToBottom = true );
+
+    //
+    //  DisplayTime () -- Display the time on our LCD :
+    //
+    void DisplayTime ( const int hours, const int minutes, const int seconds = 0 );
+
+    //
+    //  Print () -- Display the user specified text on the LCD :
+    //
+    void Print ( const char* text );
+
+    //
+    //  Print () -- Display the user specified character on the LCD :
+    //
+    void Print ( const uint8_t ch );
+
+    //
+    //  Print_Delay () -- Display the user specified character on the LCD :
+    //
+    void Print_Delay ( const uint8_t delayValue, const uint8_t ch );
+
+    //
+    //  Printf () -- Display the variable parameter user specified text on the LCD :
+    //
+    void Printf ( const char* format, ... );
+
+    //
+    //  SetCursor () -- Move the cursor to the specified location :
+    //
+    //    *** Note the parameter order is "row, column", not "column, row" ***
+    //
+    void SetCursor ( const uint16_t row, const uint16_t column );
+
+    //
+    //  SetObjectSerialCmd () -- Routine to specify optional SerialCommand object :
+    //
+    void SetObjectSerialCmd ( SerialCommand* SerialCmd = nullptr );
+
+    //
+    //  Write () -- Display the user specified character on the LCD :
+    //
+    void Write ( const byte ch );
+
+    //
+    //  Write () -- Display the user specified text on the LCD :
+    //
+    void Write ( const char* text );
+
+    //
+    //  setup () -- Routine to setup our display :
+    //
+    void setup ( void );
+
+    //
+    //  handle () -- Routine to check for updates to our display :
+    //
+    void handle ( void );
+
+}; // cMyDisplay_LCD2004
+
+
+#endif  // !_MY_DISPLAY_LCD2004_H_
+
+
+//----------------------------------------------------------------------------
+//
+//  end of  MyDisplay_LCD2004.h
+//
+//----------------------------------------------------------------------------
