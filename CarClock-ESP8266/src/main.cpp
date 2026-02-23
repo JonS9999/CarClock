@@ -15,6 +15,10 @@
 //          - Added an ASCII "screen" to MyDisplay_LCD2004 so we keep a copy
 //            of what is displayed on the LCD.  This way we can test our code
 //            without needing an actual LCD connected to the ESP8266.
+//            Note that the ASCII "screen" can be displayed using normal
+//            ASCII characters, or it can be displayed using VT100 graphics
+//            characters -- the is controlled by the m_VT100_Emulation
+//            attribute in the MyDisplay_LCD2004 object.
 //
 //      Ver 1.1 : 2026/02/15
 //          - Added MyDisplay + MyDisplay_LCD support.
@@ -26,7 +30,7 @@
 //          - Still needs a code cleanup and some refactoring (but I wanted
 //            to get this code checked in as a snapshot of a working clock).
 //
-//      Ver 1.0 : 2026/
+//      Ver 1.0 : 2026/02/01
 //          - Initial version.
 //          - Simply clock with WiFi + NTP support.
 //
