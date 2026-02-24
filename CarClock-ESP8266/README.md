@@ -71,6 +71,38 @@ There are actually two variations of this "screen" -- normal pure-ASCII and VT10
 The default mode is "Normal Mode".
 
 
+## What It Really Looks Like
+
+Here are some pics and videos of the CarClock-ESP8266 in action...
+
+<ins>Pictures</ins>
+
+<a href="images/CarClock-001.jpg">
+  <img src="images/CarClock-001.jpg" width="300" alt="CarClock-ESP8266">
+</a>
+
+<a href="images/CarClock-002.jpg">
+  <img src="images/CarClock-002.jpg" width="300" alt="CarClock-ESP8266">
+</a>
+
+<ins>Videos</ins>
+
+<a href="images/CarClock-003.mp4">
+  <img src="images/CarClock-003.jpg" width="400" alt="CarClock-ESP8266 - Video">
+</a>
+
+
+### Notes
+
+* When the time is initially displayed, it's a rough guess of the time, and when it's updated, it will jump to the proper time.
+
+* When the hours and minutes are displayed, I intentionally have the digits displayed "slowly" as I like that effect.  You can speed it up by changing the appropriate delay() commands in MyDisplay_LCD2004.cpp.
+
+* The seconds are displayed in a column in the bottom left corner of the display.  I display them in a column format so they don't run into the "1" of the hours tens-unit.  Also, if the seconds are below 10 (i.e, a single digit), the leading 0 is suppressed.
+
+* The colons will blink as astrisks (*) if the clock is connected to a WiFi network.  If not connected to a network, they will blink as exclamation points (!).
+
+
 ## OTA (Over The Air) Programming
 
 With regards to firmware updates, I added OTA (Over The Air) programming support.  I find this handy since I've already mounted the clock on the dash of my car, and instead of ripping the clock out and bringing it inside just to program it, I simply plug the clock into a USB power bank then I can stay inside the house, make changes to the code and program the clock OTA without having to have my car running all the time.  I use a large power bank that will run for hours, so power isn't an issue.
@@ -85,6 +117,11 @@ The following I2C devices are connected to the Wemos D1 Mini :
 * 0x27 : LCD Backpack.
 * 0x57 : AT24Cxxx EEPROM series (on RTC board).  (Currently not using this.)
 * 0x68 : DS3231 RTC.
+
+
+## The 3D Printed Case
+
+Yeah, the case is a little rough, but (1) I was under a time crunch to get this done and I wanted to get _something_ in the car, and (2) I really don't care (unlike a certain fellow 3D printing enthusiast that I know -- yeah, you know who you are... ;-)  I might end up reprinting it using some sort of translucent filament so I can see the on-board Wemos D1 Mini LED, but then again, that might be distracting at night.  Time will tell...
 
 
 ## The Future
