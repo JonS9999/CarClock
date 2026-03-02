@@ -89,8 +89,7 @@ Here are some pics and videos of the CarClock-ESP8266 in action...
 <br><ins>Videos</ins>
 
 <div align="center">
-  <video src="CarClock-ESP8266/images/CarClock-003.mp4" width="600" muted autoplay loop playsinline controls>
-  </video>
+  <img src="CarClock-ESP8266/images/CarClock-003-FullVideo.gif" width="600" alt="CarClock Demo">
 </div>
 
 
