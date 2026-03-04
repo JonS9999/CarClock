@@ -49,7 +49,28 @@ class cMyWiFi
     //
     //  Routine that we call when we are attempting to connect to the WiFi :
     //
-    void (*m_CallbackConnecting) ( const char* ssid );
+    void (*m_Callback_Connecting) (   const int   index,
+                                      const char* ssid );
+
+    //
+    //  Routine to set the 'no usable network found' callback :
+    //
+    void (*m_Callback_NoUsableNetwork) ( void );
+
+    //
+    //  Routine to set the 'scanning for networks' callback :
+    //
+    void (*m_Callback_ScanningForNetworks) ( void );
+
+    //
+    //  Routine to set the 'searching for an open network' callback :
+    //
+    void (*m_Callback_SearchingForOpenNetwork) ( void );
+
+    //
+    //  Routine to set the 'searching for a preferred network' callback :
+    //
+    void (*m_Callback_SearchingForPreferredNetwork) ( void );
 
     //
     //  Routine that we call when we connect to the WiFi :
@@ -150,7 +171,27 @@ class cMyWiFi
     //
     //  Routine to set the 'connecting' callback :
     //
-    void  SetCallbackConnecting ( void (*ptr) ( const char* ssid ) );
+    void  SetCallback_Connecting ( void (*ptr) ( const int index, const char* ssid ) );
+
+    //
+    //  Routine to set the 'no usable network found' callback :
+    //
+    void  SetCallback_NoUsableNetwork ( void (*ptr) ( void ) );
+
+    //
+    //  Routine to set the 'scanning for networks' callback :
+    //
+    void  SetCallback_ScanningForNetworks ( void (*ptr) ( void ) );
+
+    //
+    //  Routine to set the 'searching for an open network' callback :
+    //
+    void  SetCallback_SearchingForOpenNetwork ( void (*ptr) ( void ) );
+
+    //
+    //  Routine to set the 'searching for a preferred network' callback :
+    //
+    void  SetCallback_SearchingForPreferredNetwork ( void (*ptr) ( void ) );
 
     //
     //  Routine to set the 'on connect' callback :

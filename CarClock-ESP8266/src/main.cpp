@@ -8,6 +8,9 @@
 //
 //  History :
 //
+//      Ver 1.3 : 2026/03/01
+//          - Added code to search open WiFi networks.
+//
 //      Ver 1.2 : 2026/02/20
 //          - Added SerialCommand library to be able to drive the clock
 //            via the serial (USB) port -- Not doing anything with this yet.
@@ -211,20 +214,146 @@ void cb_TimeSyncEvent ()
 //----------------------------------------------------------------------------
 //
 //  cb_WiFi_Connecting () -- WiFi callback which is called when the WiFi
-//                           module attempts to connect to an access opint.
+//                           module attempts to connect to an access point.
 //
 //----------------------------------------------------------------------------
 
-void cb_WiFi_Connecting ( const char* ssid )
+void cb_WiFi_Connecting (   const int   index,              // Index into WiFi.RSSI(index).
+                            const char* ssid )
 {
+    //
+    //  Local variables :
+    //
+    char    buf[80];                                // Temporary text buffer.
+
+
+    //
+    //  Create the string to display :
+    //
+    //                          "--------------------"
+    //                          "Trying open WiFi :",
+    //                          "Trying secure WiFi :",
+    snprintf ( buf, sizeof(buf), "Trying %s WiFi :",
+        ( (WiFi.encryptionType(index) == ENC_TYPE_NONE) ? "open" : "secure") );
+
     MyPrintf ( "[cb_WiFi_Connecting]  ------------------------------------------\n" );
-    MyPrintf ( "[cb_WiFi_Connecting]  Called : AP = [%s].\n", ssid );
+    MyPrintf ( "[cb_WiFi_Connecting]  Called : Idx # %d / AP = [%s].\n", index, ssid );
+
 
     //                          "--------------------"
-    g_Display.DisplayMessage3 ( "Connecting to...",         // Row 0.
+    g_Display.DisplayMessage3 ( buf,                        // Row 0 (see above).
                                 "",                         // Row 1.
-                                ssid,                       // Row 2.
+                                ssid,                       // Row 2 (SSID).
                                 false );                    // Do not force SSID to the bottom row.
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_NoUsableNetwork () -- WiFi callback which is called when
+//              the WiFi module is not able to connect to any network.
+//
+//      Note that we only display something the first time we are called.
+//      This is so that once we're running and searching for networks, when
+//      we don't find one, we just return as quickly as possible (to get
+//      back to displaying the time on our display).
+//
+//----------------------------------------------------------------------------
+
+void cb_WiFi_NoUsableNetwork ( void )
+{
+    //
+    //  Local variables :
+    //
+    static bool     s_UpdateDisplay     = true;         // Used to track if we should update the display.
+
+
+    //
+    //  Always display the following :
+    //
+    MyPrintf ( "[cb_WiFi_NoUsableNetwork]  ------------------------------------------\n" );
+    MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Called : Update display = %s.\n", ( (s_UpdateDisplay == true) ? "TRUE" : "FALSE") );
+
+
+    //
+    //  Should we display a message on our display ?
+    //
+    if ( s_UpdateDisplay == true )
+    {
+        MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Displaying stuff on the display just this one time.\n" );
+
+        //                          "--------------------"
+        g_Display.DisplayMessage3 ( "No usable networks",
+                                    "found.",
+                                    "" );
+
+        delay ( 2000 );
+
+        s_UpdateDisplay = false;
+    }
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_ScanningForNetworks () -- WiFi callback which is called
+//              when the WiFi module is about to scan for networks.
+//
+//----------------------------------------------------------------------------
+
+void cb_WiFi_ScanningForNetworks ( void )
+{
+    MyPrintf ( "[cb_WiFi_ScanningForNetworks]  ------------------------------------------\n" );
+    MyPrintf ( "[cb_WiFi_ScanningForNetworks]  Called.\n" );
+
+    //                          "--------------------"
+    g_Display.DisplayMessage3 ( "Scanning for WiFi",
+                                "networks.",
+                                "Please wait..." );
+
+    delay ( 2000 );
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_SearchingForOpenNetwork () -- WiFi callback which is called
+//              when the WiFi module searches for an open network.
+//
+//----------------------------------------------------------------------------
+
+void cb_WiFi_SearchingForOpenNetwork ( void )
+{
+    MyPrintf ( "[cb_WiFi_SearchingForOpen]  ------------------------------------------\n" );
+    MyPrintf ( "[cb_WiFi_SearchingForOpen]  Called.\n" );
+
+    //                          "--------------------"
+    g_Display.DisplayMessage3 ( "Searching for an",
+                                "open network.",
+                                "Please wait..." );
+
+    delay ( 2000 );
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_SearchingForPreferredNetwork () -- WiFi callback which is called
+//              when the WiFi module searches for a preferred network.
+//
+//----------------------------------------------------------------------------
+
+void cb_WiFi_SearchingForPreferredNetwork ( void )
+{
+    MyPrintf ( "[cb_WiFi_SearchingForPreferred]  ------------------------------------------\n" );
+    MyPrintf ( "[cb_WiFi_SearchingForPreferred]  Called.\n" );
+
+    //                          "--------------------"
+    g_Display.DisplayMessage3 ( "Searching for a",
+                                "preferred network.",
+                                "Please wait..." );
+
+    delay ( 2000 );
 }
 
 
@@ -318,7 +447,11 @@ void setup ( void )
     //  Initialize our WiFi object :
     //
     g_WiFi.setup ();
-    g_WiFi.SetCallbackConnecting ( cb_WiFi_Connecting );
+    g_WiFi.SetCallback_Connecting                   ( cb_WiFi_Connecting );
+    g_WiFi.SetCallback_NoUsableNetwork              ( cb_WiFi_NoUsableNetwork );
+    g_WiFi.SetCallback_ScanningForNetworks          ( cb_WiFi_ScanningForNetworks );
+    //g_WiFi.SetCallback_SearchingForOpenNetwork      ( cb_WiFi_SearchingForOpenNetwork );
+    //g_WiFi.SetCallback_SearchingForPreferredNetwork ( cb_WiFi_SearchingForPreferredNetwork );
 
 
     //
@@ -405,18 +538,6 @@ void loop ( void )
     {
         MyPrintf ( "[Loop]  Trying to connect to a WiFi network...\n" );
 
-#if 0   // OLD CODE
-        //                          "--------------------"
-        g_Display.DisplayMessage3 ( "Attempting to",
-                                    "connect to WiFi...",
-                                    "Please wait." );
-#endif  // OLD CODE
-
-        //                          "--------------------"
-        g_Display.DisplayMessage3 ( "Searching for",
-                                    "WiFi networks...",
-                                    "Please wait." );
-
         //
         //  Use our own semi-fancy WiFi manager :
         //
@@ -464,7 +585,7 @@ void loop ( void )
                 //  Display some WiFi information on the LCD display :
                 //
                 //                          "--------------------"
-                g_Display.DisplayMessage3 ( "Connected to WiFi:",
+                g_Display.DisplayMessage3 ( "Connected to WiFi :",
                                             WiFi.SSID().c_str(),
                                             WiFi.localIP().toString().c_str() );
 
@@ -529,7 +650,7 @@ void loop ( void )
         MyPrintf ( "[Loop]  Trying to get the time...\n" );
 
         //                          "--------------------"
-        g_Display.DisplayMessage3 ( "Connected to WiFi:",
+        g_Display.DisplayMessage3 ( "Connected to WiFi :",
                                      WiFi.SSID().c_str(),
                                      "Getting the time..." );
 

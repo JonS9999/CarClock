@@ -41,14 +41,17 @@ cMyWiFi::cMyWiFi ( void )
   //
   //  Things we want to make sure we do only once :
   //
-  //  m_State             = WIFI_STATE_UNKNOWN;
-  m_MyHostname[0]         = '\0';
-  //m_MyIpAddr              = ( 0, 0, 0, 0 );
-  m_MySSID[0]             = '\0';
-  m_CallbackConnecting    = NULL;
-  m_CallbackOnConnect     = NULL;
-  m_CallbackOnDisconnect  = NULL;
-
+  //  m_State                               = WIFI_STATE_UNKNOWN;
+  m_MyHostname[0]                           = '\0';
+  //m_MyIpAddr                                = ( 0, 0, 0, 0 );
+  m_MySSID[0]                               = '\0';
+  m_Callback_Connecting                     = NULL;
+  m_Callback_NoUsableNetwork                = NULL;
+  m_Callback_ScanningForNetworks            = NULL;
+  m_Callback_SearchingForOpenNetwork        = NULL;
+  m_Callback_SearchingForPreferredNetwork   = NULL;
+  m_CallbackOnConnect                       = NULL;
+  m_CallbackOnDisconnect                    = NULL;
 }
 
 
@@ -63,8 +66,29 @@ bool cMyWiFi::Connect ( void )
     //
     //  Local variables :
     //
-    char buf[30];                   // Temporary text buffer.
+    char    buf[30];                        // Temporary text buffer.
+    bool    firstTime       = true;         // First time we try something?
 
+
+    //-----------------------------------------------------------------------
+    //
+    //  Call the optional user specified 'scanning for networks' callback :
+    //
+    //-----------------------------------------------------------------------
+
+    if ( m_Callback_ScanningForNetworks != NULL )
+    {
+        MyPrintf ( "[WiFi::Connect]  +++ Calling 'scanning for networks' callback +++\n" );
+        (*m_Callback_ScanningForNetworks) ();
+        MyPrintf ( "[WiFi::Connect]  +++ Back from 'scanning for networks' callback +++\n" );
+    }
+
+
+    //-----------------------------------------------------------------------
+    //
+    //  Now get a list of networks we can see :
+    //
+    //-----------------------------------------------------------------------
 
     MyPrintf ( "[WiFi::Connect]  Scanning for networks...\n" );
     int n = WiFi.scanNetworks();
@@ -92,31 +116,149 @@ bool cMyWiFi::Connect ( void )
         return ( false );
     }
 
-    // Loop through our 4 slots
-    for (int slot = 0; slot < MAX_WIFI_NETWORKS; slot++)
-    {
-        if (strlen(config.wifiSlots[slot].ssid) == 0) continue;
 
-        MyPrintf ( "[WiFi::Connect]  Looking for SSID [%s]...\n", config.wifiSlots[slot].ssid );
+    //
+    //  Be sure to set "firstTime" to 'true' so we display some initial
+    //  messages on the display :
+    //
+    firstTime = true;
+
+
+    //
+    //  Loop through our list of preferred networks :
+    //
+    for (int slot = 0 ; slot < NUM_WIFI_PREFERRED ; slot++ )
+    {
+        //-----------------------------------------------------------------------
+        //
+        //  Do some minor sanity checks before we try to connect to a
+        //  network :
+        //
+        //-----------------------------------------------------------------------
+
+        if ( strlen(WIFI_PREFERRED[slot].SSID) == 0 ) continue;
+
+
+        //-----------------------------------------------------------------------
+        //
+        //  If this is the first time we're attempting to look for a preferred
+        //  network, then call the optional callback :
+        //
+        //-----------------------------------------------------------------------
+
+        if ( (firstTime == true) && (m_Callback_SearchingForPreferredNetwork != NULL) )
+        {
+            MyPrintf ( "[WiFi::Connect]  +++ Calling 'searching for a preferred network' callback +++\n" );
+            (*m_Callback_SearchingForPreferredNetwork) ();
+            MyPrintf ( "[WiFi::Connect]  +++ Back from 'searching for a preferred network' callback +++\n" );
+
+            firstTime =  false;
+        }
+
+        MyPrintf ( "[WiFi::Connect]  Looking for SSID [%s]...\n", WIFI_PREFERRED[slot].SSID );
 
         // Check if our stored SSID is in the scan results
-        for (int i = 0; i < n; i++)
+        for ( int i = 0; i < n; i++ )
         {
-            if (WiFi.SSID(i) == String(config.wifiSlots[slot].ssid))
+            if ( WiFi.SSID(i) == String(WIFI_PREFERRED[slot].SSID) )
             {
                 //
-                //  Call the optional user specified 'connecting' callback :
+                //  Only attempt to connect if our preferred network
+                //  secure/open setup matches the secure/open setting
+                //  of the network we found :
                 //
-                if ( m_CallbackConnecting != NULL )
+                if ( (strlen(WIFI_PREFERRED[slot].passwd) > 0) &&   // Preferred network is secure (has a password).
+                     (WiFi.encryptionType(i) != ENC_TYPE_NONE) )    // Found network is secure (not open).
                 {
-                    MyPrintf ( "[WiFi::Connect]  +++ Calling 'connecting' callback +++\n" );
-                    (*m_CallbackConnecting) ( config.wifiSlots[slot].ssid );
-                    MyPrintf ( "[WiFi::Connect]  +++ Back from 'connecting' callback +++\n" );
+                    //
+                    //  Call the optional user specified 'connecting' callback :
+                    //
+                    if ( m_Callback_Connecting != NULL )
+                    {
+                        MyPrintf ( "[WiFi::Connect]  +++ Calling 'connecting' callback +++\n" );
+                        (*m_Callback_Connecting) ( i, WIFI_PREFERRED[slot].SSID );
+                        MyPrintf ( "[WiFi::Connect]  +++ Back from 'connecting' callback +++\n" );
+                    }
+
+                    MyPrintf ( "[WiFi::Connect]  Found priority %d: [%s].  Connecting...", (slot + 1), WIFI_PREFERRED[slot].SSID );
+
+                    WiFi.begin(WIFI_PREFERRED[slot].SSID, WIFI_PREFERRED[slot].passwd);
+
+                    // Wait up to 10s for connection
+                    unsigned long start = millis();
+                    while ( (WiFi.status() != WL_CONNECTED) && ((millis() - start) < 10000)) {
+                        delay(500);
+                        Serial.print(".");
+                    }
+                    Serial.printf ( "\n" );
+
+                    if ( WiFi.status() == WL_CONNECTED )
+                    {
+                        MyPrintf ( "[WiFi::Connect]  Connected!\n" );
+                        config.isConnected = true;
+                        displayWifiStatus();
+                        return ( true );
+                    }
+                    MyPrintf ( "[WiFi::Connect]  Connection failed.\n" );
                 }
+                else
+                {
+                    MyPrintf ( "[WiFi::Connect]  Skipping [%s] : Preferred is %s / Found is %s.\n",
+                        WIFI_PREFERRED[slot].SSID,
+                        ( (strlen(WIFI_PREFERRED[slot].passwd) > 0) ? "SECURE" : "OPEN" ),
+                        ( (WiFi.encryptionType(i) != ENC_TYPE_NONE) ? "SECURE" : "OPEN" ) );
+                }
+            } // if
+        } // for
+    } // for
 
-                MyPrintf ( "[WiFi::Connect]  Found priority %d: [%s].  Connecting...", slot + 1, config.wifiSlots[slot].ssid );
 
-                WiFi.begin(config.wifiSlots[slot].ssid, config.wifiSlots[slot].pass);
+    //-----------------------------------------------------------------------
+    //
+    //  If we reach this point, then that means we've struck out on finding
+    //  any of our preferred networks.  Therefore, we look for open networks
+    //  in hopes of finding one that is connected to the Internet.
+    //
+    //-----------------------------------------------------------------------
+
+    //
+    //  Be sure to set "firstTime" to 'true' so we display some initial
+    //  messages on the display :
+    //
+    firstTime = true;
+
+
+    //
+    //  Walk through the list of networks we found, and try to find
+    //  one that is an open network :
+    //
+    for ( int i = 0 ; i < n ; i++ )
+    {
+        //
+        //  Is this an open network ?
+        //
+        if ( WiFi.encryptionType(i) == ENC_TYPE_NONE )
+        {
+            if ( (firstTime == true) && (m_Callback_SearchingForOpenNetwork != NULL) )
+            {
+                MyPrintf ( "[WiFi::Connect]  +++ Calling 'searching for an open network' callback +++\n" );
+                (*m_Callback_SearchingForOpenNetwork) ();
+                MyPrintf ( "[WiFi::Connect]  +++ Back from 'searching for an open network' callback +++\n" );
+
+                firstTime =  false;
+            }
+
+
+            //
+            //  Call the optional user specified 'connecting' callback :
+            //
+            if ( m_Callback_Connecting != NULL )
+            {
+                MyPrintf ( "[WiFi::Connect]  +++ Calling 'connecting' callback +++\n" );
+                (*m_Callback_Connecting) ( i, WiFi.SSID(i).c_str() );
+                MyPrintf ( "[WiFi::Connect]  +++ Back from 'connecting' callback +++\n" );
+
+                WiFi.begin ( WiFi.SSID(i).c_str() );
 
                 // Wait up to 10s for connection
                 unsigned long start = millis();
@@ -136,9 +278,24 @@ bool cMyWiFi::Connect ( void )
                 MyPrintf ( "[WiFi::Connect]  Connection failed.\n" );
             }
         }
-    }
+    } // for
+
+
+    //-----------------------------------------------------------------------
+    //
+    //  Finally, if we're reached this point, then we've exhausted all of
+    //  our options, so we just bail :
+    //
+    //-----------------------------------------------------------------------
 
     config.isConnected = false;
+
+    if ( m_Callback_NoUsableNetwork != NULL )
+    {
+        MyPrintf ( "[WiFi::Connect]  +++ Calling 'no usable network found' callback +++\n" );
+        (*m_Callback_NoUsableNetwork) ();
+        MyPrintf ( "[WiFi::Connect]  +++ Back from 'no usable network found' callback +++\n" );
+    }
 
     return ( false );
 }
@@ -343,11 +500,67 @@ const char* cMyWiFi::MyHostname ( void )
 //
 //-----------------------------------------------------------------------------
 
-void  cMyWiFi::SetCallbackConnecting ( void (*ptr) ( const char* ssid ) )
+void  cMyWiFi::SetCallback_Connecting ( void (*ptr) ( const int index, const char* ssid ) )
 {
-  MyPrintf ( "[WiFi::SetCallbackConnecting] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
+  MyPrintf ( "[WiFi::SetCallback_Connecting] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
 
-  m_CallbackConnecting = ptr;
+  m_Callback_Connecting = ptr;
+}
+
+
+//-----------------------------------------------------------------------------
+//
+//  Routine to set the 'no usable network found' callback :
+//
+//-----------------------------------------------------------------------------
+
+void  cMyWiFi::SetCallback_NoUsableNetwork ( void (*ptr) ( void ) )
+{
+  MyPrintf ( "[WiFi::SetCallback_NoUsableNetwork] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
+
+  m_Callback_NoUsableNetwork = ptr;
+}
+
+
+//-----------------------------------------------------------------------------
+//
+//  Routine to set the 'scanning for networks' callback :
+//
+//-----------------------------------------------------------------------------
+
+void  cMyWiFi::SetCallback_ScanningForNetworks ( void (*ptr) ( void ) )
+{
+  MyPrintf ( "[WiFi::SetCallback_ScanningForNetworks] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
+
+  m_Callback_ScanningForNetworks = ptr;
+}
+
+
+//-----------------------------------------------------------------------------
+//
+//  Routine to set the 'searching for an open network' callback :
+//
+//-----------------------------------------------------------------------------
+
+void  cMyWiFi::SetCallback_SearchingForOpenNetwork ( void (*ptr) ( void ) )
+{
+  MyPrintf ( "[WiFi::SetCallback_SearchingForOpenNetwork] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
+
+  m_Callback_SearchingForOpenNetwork = ptr;
+}
+
+
+//-----------------------------------------------------------------------------
+//
+//  Routine to set the 'searching for a preferred network' callback :
+//
+//-----------------------------------------------------------------------------
+
+void  cMyWiFi::SetCallback_SearchingForPreferredNetwork ( void (*ptr) ( void ) )
+{
+  MyPrintf ( "[WiFi::SetCallback_SearchingForPreferredNetwork] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
+
+  m_Callback_SearchingForPreferredNetwork = ptr;
 }
 
 
@@ -448,10 +661,10 @@ void displayStoredSSIDs(void) {
 
     MyPrintf ( "--- Stored WiFi Priorities ---\n" );
 
-    for (int i = 0; (i < MAX_WIFI_NETWORKS); ++i) {
+    for (int i = 0; (i < NUM_WIFI_PREFERRED); ++i) {
         MyPrintf ( "Slot %d: ", (i + 1) );
-        if ( (strlen(config.wifiSlots[i].ssid) > 0) ) {
-            Serial.printf("SSID: [%s]\n", config.wifiSlots[i].ssid);
+        if ( (strlen(WIFI_PREFERRED[i].SSID) > 0) ) {
+            Serial.printf("SSID: [%s]\n", WIFI_PREFERRED[i].SSID);
         } else {
             Serial.println("<EMPTY>");
         }

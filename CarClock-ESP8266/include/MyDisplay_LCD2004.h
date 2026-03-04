@@ -47,6 +47,8 @@ const uint8_t   LCD2004_ROWS    = (4);
 //
 //-----------------------------------------------------------------------------
 
+//class cMyDisplay_LCD2004 : public cMyDisplay
+
 class cMyDisplay_LCD2004
 {
   private :

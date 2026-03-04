@@ -55,7 +55,7 @@
 //
 //--------------------------------------------------------------
 
-#define MAX_WIFI_NETWORKS   (4)
+//#define MAX_WIFI_NETWORKS   (4)
 #define BUTTON_AP_MODE      (0)     // Set this to your actual GPIO pin (e.g., 0 for Boot button)
 #define IP_ADDR_SIZE        (17)
 #define MAC_ADDR_SIZE       (18)
@@ -67,10 +67,10 @@
 //
 //--------------------------------------------------------------
 
-typedef struct
+typedef struct                          // See Secrets.cpp
 {
-    char ssid[32];
-    char pass[32];
+    const char*     SSID;
+    const char*     passwd;
 } tWiFiCredentials;
 
 #ifdef  DO_WEATHER
@@ -86,7 +86,7 @@ typedef struct
 
 typedef struct
 {
-    tWiFiCredentials wifiSlots[MAX_WIFI_NETWORKS];
+//    tWiFiCredentials wifiSlots[MAX_WIFI_NETWORKS];
     bool isConnected;       // Are we connected to a WiFi network?
     char owmApiKey[33];     // OpenWeatherMap API Key
     char cityQuery[32];     // e.g., "Cedar Rapids,US"
@@ -133,6 +133,18 @@ extern Timezone         myTZ;
 #ifdef  DO_WEATHER
 extern tWeatherData     currentWeather;
 #endif  // DO_WEATHER
+
+
+//--------------------------------------------------------------
+//
+//  The following things are defined in Secrets.cpp so that we
+//  can keep all of our preferred WiFi credentials (SSIDs and
+//  passwords) out of the main code :
+//
+//--------------------------------------------------------------
+
+extern tWiFiCredentials     WIFI_PREFERRED[];       // Secrets.cpp -- List of SSIDs & passwords.
+extern const int            NUM_WIFI_PREFERRED;     // Secrets.cpp -- Number of entries in WIFI_PREFERRED[].
 
 
 #endif // !_COMMON_H_
