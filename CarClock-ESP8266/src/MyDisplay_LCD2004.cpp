@@ -1481,8 +1481,8 @@ void cMyDisplay_LCD2004::handle ( void )
     //
     //  Local variables :
     //
-    char            c1;
-    char            c2;
+    char            colon_top;                              // Top part of the colon.
+    char            colon_bottom;                           // Bottom part of the colon.
     uint32_t        curMillis               = millis();
     static bool     s_ColonState            = false;
     static bool     s_OldDisplayingTime     = false;
@@ -1529,43 +1529,89 @@ void cMyDisplay_LCD2004::handle ( void )
             s_ColonState = !s_ColonState;
 
             //
-            //  Decide which type of colon to use :
+            //  Are we supposed to display something ?
             //
-            //      ' ' : No colon.
-            //       *  : Colon on -- WiFi connected.
-            //       !  : Colon on -- WiFi not connected.
-            //
-            c1 = ' ';       // Left part of colon.
-            c2 = ' ';       // Right part of colon.
-
             if ( s_ColonState == true )
             {
+                //--------------------------------------------------------
                 //
-                //  We print something, so if we are connected, then
-                //  we will print '*'.  If we are not connected, then
-                //  we will print '!!' (two '!').
+                //  Determine what to use for the top half of the colon.
+                //  It is based on connection type :
                 //
-                c1 = '*';       // Left part of colon.
-                c2 = ' ';       // Right part of colon.
+                //      '!' = Not connected to a network.
+                //
+                //      'O' = Connected to an open (insecure) network.
+                //
+                //      '*' = Connected to a secure network.
+                //
+                //      '?' = Unable to determine the type of network
+                //            that we are connected to.
+                //
+                //--------------------------------------------------------
+
+                //
+                //  Determine what to display based on our connection type :
+                //
+                switch ( g_WiFi.GetHostConnectionType() )
+                {
+                    case CON_TYPE_NOT_CONNECTED : colon_top = '!';  break;
+                    case CON_TYPE_OPEN          : colon_top = 'O';  break;
+                    case CON_TYPE_SECURE        : colon_top = '*';  break;
+                    case CON_TYPE_UNKNOWN       : colon_top = '?';  break;
+                    default                     : colon_top = '?';  break;
+                } // switch
+
+                //--------------------------------------------------------
+                //
+                //  Determine what to use for the bottom half of the
+                //  colon.  It is based on if we were able to get the
+                //  time, messages, weather, etc :
+                //
+                //      '!' = Not connected to WiFi network.
+                //
+                //      '*' = Connected to WiFi network + Everything is
+                //            good (we got the messages, time, etc).
+                //
+                //      'M' = Unable to get the messages.   [TO-DO]
+                //
+                //      'T' = Unable to get the time.       [TO-DO]
+                //
+                //      'W' = Unable to get the weather.    [TO-DO]
+                //
+                //--------------------------------------------------------
 
                 if ( WiFi.status() != WL_CONNECTED )
                 {
-                    c1 = '!';
-                    c2 = ' ';
+                    colon_bottom    = '!';      // Not connected -- FOR NOW JUST DO THIS.
                 }
+                else
+                {
+                    colon_bottom    = '*';      // Connected -- FOR NOW JUST DO THIS.
+                }
+
+                //MyPrintf ( "[Display_LCD2004::handle]  Colon = [%c] [%c].\n", colon_top, colon_bottom );     // DEBUG HACK
+            }
+            else
+            {
+                //
+                //  We are not supposed to display a colon, so use a
+                //  space (' ') for both the top and bottom part of the
+                //  colon :
+                //
+                colon_top       = ' ';
+                colon_bottom    = ' ';
             }
 
-            SetCursor ( 1, 9 );
-            Print_Delay ( 5, c1 );          // Use a shorter delay() than we normally use.
-            Print_Delay ( 5, c2 );
+            //
+            //  Now display the colon in two steps :
+            //
+            SetCursor ( 1, 9 );                 // Top part of the colon.
+            Print_Delay ( 5, colon_top );       // Use a shorter delay() than we normally use.
 
-            SetCursor ( 2, 9 );
-            Print_Delay ( 5, c1 );
-            Print_Delay ( 5, c2 );
+            SetCursor ( 2, 9 );                 // Bottom part of the colon.
+            Print_Delay ( 5, colon_bottom );    // Use a shorter delay() than we normally use.
 
-            delay ( 20 );
-
-            // MyPrintf ( "c1 = [%c]  c2 = [%c].\n", c1, c2 );
+            delay ( 10 );
 
             debug_DisplayTextScreen = true;
         } // if

@@ -14,6 +14,22 @@
 #include "MyWiFi_OTA.h"
 
 
+
+//----------------------------------------------------------------------------
+//
+//  Enumerations
+//
+//----------------------------------------------------------------------------
+
+typedef enum
+{
+    CON_TYPE_NOT_CONNECTED,             // Not connected to any network.
+    CON_TYPE_OPEN,                      // Connected to open (insecure) network.
+    CON_TYPE_SECURE,                    // Connected to secure network.
+    CON_TYPE_UNKNOWN,                   // Connected to a network, but cannot identify type.
+} tWiFiConnectionType;
+
+
 //-----------------------------------------------------------------------------
 //
 //  cMyWiFi object
@@ -23,13 +39,6 @@
 class cMyWiFi
 {
   private :
-
-#if 0   // DEBUG HACK...
-    //
-    //  Constructor :
-    //
-    cMyWiFi ( void );
-#endif
 
     //
     //  m_IsInitialized -- Flag used track if we've been initialized yet or not.
@@ -45,6 +54,36 @@ class cMyWiFi
     //  Flag to track if we're connected to a WiFi network :
     //
     //    bool  m_WiFiIsConnected;
+
+    //
+    //  My hostname :
+    //
+    char  m_MyHostname[40];
+
+    //
+    //  My IP address :
+    //
+    IPAddress m_MyIpAddr;
+
+    //
+    //  My SSID :
+    //
+    char  m_MySSID[40];
+
+    //
+    //  SSID of the host we're connected to :
+    //
+    char  m_HostSSID[40];
+
+    //
+    //  Type of connection we have to the hose :
+    //
+    tWiFiConnectionType m_HostConnectionType;
+
+    //
+    //  Type of security of the hose we're connected to :
+    //
+    uint8_t m_HostEncryptionType;
 
     //
     //  Routine that we call when we are attempting to connect to the WiFi :
@@ -82,20 +121,6 @@ class cMyWiFi
     //
     void (*m_CallbackOnDisconnect) ( void );
 
-    //
-    //  My hostname :
-    //
-    char  m_MyHostname[40];
-
-    //
-    //  My IP address :
-    //
-    IPAddress m_MyIpAddr;
-
-    //
-    //  My SSID :
-    //
-    char  m_MySSID[40];
 
     //
     //  One instance of the WifManager library :
@@ -139,6 +164,11 @@ class cMyWiFi
     //  Routine to connect to a WiFi network :
     //
     bool Connect ( void );
+
+    //
+    //  Return the type of connection we have to our host :
+    //
+    const tWiFiConnectionType GetHostConnectionType ( void );
 
     //
     //  Return our MAC address in the form AABBCCDDEEFF :
@@ -220,9 +250,6 @@ class cMyWiFi
     //
     void setup ( void );
 
-//    void setup (  const char*   myHostName,
-//                  const char*   mySSID );
-
     //
     //  handle () -- Routine to check for WiFi related things :
     //
@@ -267,6 +294,22 @@ class cMyWiFi
     inline const char* GetMySSID ( void )
     {
       return ( (const char*)m_MySSID );
+    }
+
+    //
+    //  Return the SSID of the host we're connected to :
+    //
+    inline const char* GetHostSSID ( void )
+    {
+      return ( (const char*)m_HostSSID );
+    }
+
+    //
+    //  Return the encryption type of the host we're connected to :
+    //
+    inline const uint8_t GetHostEncryptionType ( void )
+    {
+      return ( (const uint8_t)m_HostEncryptionType );
     }
 
 

@@ -43,8 +43,11 @@ cMyWiFi::cMyWiFi ( void )
   //
   //  m_State                               = WIFI_STATE_UNKNOWN;
   m_MyHostname[0]                           = '\0';
-  //m_MyIpAddr                                = ( 0, 0, 0, 0 );
   m_MySSID[0]                               = '\0';
+  m_HostSSID[0]                             = '\0';
+  m_HostConnectionType                      = CON_TYPE_NOT_CONNECTED;
+  m_HostEncryptionType                      = ENC_TYPE_NONE;
+
   m_Callback_Connecting                     = NULL;
   m_Callback_NoUsableNetwork                = NULL;
   m_Callback_ScanningForNetworks            = NULL;
@@ -192,13 +195,25 @@ bool cMyWiFi::Connect ( void )
                     }
                     Serial.printf ( "\n" );
 
+                    //
+                    //  If we have successfully connected to the network, then
+                    //  do a little house-keeping and return now :
+                    //
                     if ( WiFi.status() == WL_CONNECTED )
                     {
                         MyPrintf ( "[WiFi::Connect]  Connected!\n" );
                         config.isConnected = true;
+
+                        strncpy ( m_HostSSID, WiFi.SSID(i).c_str(), sizeof(m_HostSSID) );
+                        m_HostSSID[sizeof(m_HostSSID)-1] = '\0';
+
+                        m_HostEncryptionType = WiFi.encryptionType(i);
+
                         displayWifiStatus();
+
                         return ( true );
                     }
+
                     MyPrintf ( "[WiFi::Connect]  Connection failed.\n" );
                 }
                 else
@@ -268,13 +283,25 @@ bool cMyWiFi::Connect ( void )
                 }
                 Serial.printf ( "\n" );
 
+                //
+                //  If we have successfully connected to the network, then
+                //  do a little house-keeping and return now :
+                //
                 if ( WiFi.status() == WL_CONNECTED )
                 {
                     MyPrintf ( "[WiFi::Connect]  Connected!\n" );
                     config.isConnected = true;
+
+                    strncpy ( m_HostSSID, WiFi.SSID(i).c_str(), sizeof(m_HostSSID) );
+                    m_HostSSID[sizeof(m_HostSSID)-1] = '\0';
+
+                    m_HostEncryptionType = WiFi.encryptionType(i);
+
                     displayWifiStatus();
+
                     return ( true );
                 }
+
                 MyPrintf ( "[WiFi::Connect]  Connection failed.\n" );
             }
         }
@@ -297,7 +324,66 @@ bool cMyWiFi::Connect ( void )
         MyPrintf ( "[WiFi::Connect]  +++ Back from 'no usable network found' callback +++\n" );
     }
 
+    //
+    //  Clear out the information about who we were connected to :
+    //
+    m_HostSSID[0]           = '\0';
+    m_HostEncryptionType    = ENC_TYPE_NONE;
+
     return ( false );
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  Return the connection type of the host we're connected to :
+//
+//----------------------------------------------------------------------------
+const tWiFiConnectionType cMyWiFi::GetHostConnectionType ( void )
+{
+    //
+    //  If we are not connected, return now :
+    //
+    if ( WiFi.status() != WL_CONNECTED )
+    {
+        return ( CON_TYPE_NOT_CONNECTED );
+    }
+
+
+    //
+    //  We are connected to a host, so return our connection type :
+    //
+    switch ( GetHostEncryptionType() )
+    {
+        //
+        //  Open (insecure) network :
+        //
+        case ENC_TYPE_NONE :            // Open (Insecure).
+            return ( CON_TYPE_OPEN );
+            break;
+
+        //
+        //  Secure network :
+        //
+        case ENC_TYPE_WEP   :           // ENC_TYPE_WEP.
+        case ENC_TYPE_TKIP  :           // ENC_TYPE_TKIP.
+        case ENC_TYPE_CCMP  :           // AUTH_WPA2_PSK.
+        case ENC_TYPE_AUTO  :           // AUTH_WPA_WPA2_PSK.
+            return ( CON_TYPE_SECURE );
+            break;
+
+        //
+        //  Unknown encryption type !!!
+        //
+        default :
+            break;
+    } // switch
+
+
+    //
+    //  Unknown encryption/connection type !!!
+    //
+    return ( CON_TYPE_UNKNOWN );
 }
 
 
