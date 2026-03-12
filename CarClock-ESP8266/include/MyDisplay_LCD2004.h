@@ -15,6 +15,17 @@
 
 
 //
+//  *Must* include Common.h first :
+//
+#include "Common.h"
+
+//
+//  Are we using this type of display ?
+//
+#ifdef  USE_DISPLAY_LCD2004
+
+
+//
 //  System include files :
 //
 #include <Arduino.h>
@@ -27,7 +38,6 @@
 //
 //  Local include files :
 //
-#include "Common.h"
 #include "MyDisplay.h"              // Generic display.
 
 
@@ -47,16 +57,9 @@ const uint8_t   LCD2004_ROWS    = (4);
 //
 //-----------------------------------------------------------------------------
 
-//class cMyDisplay_LCD2004 : public cMyDisplay
-
-class cMyDisplay_LCD2004
+class cMyDisplay_LCD2004 : public cMyDisplay
 {
   private :
-
-    //
-    //  m_IsInitialized -- Flag used track if we've been initialized yet or not.
-    //
-    bool  m_IsInitialized;
 
     //
     //  m_LcdIsPresent -- Flag used to determine if we have a display connected
@@ -113,6 +116,7 @@ class cMyDisplay_LCD2004
     //
     bool m_VT100_Emulation;
 
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     //
     //  Display_Seconds () -- Display the seconds on the LCD :
@@ -146,6 +150,12 @@ class cMyDisplay_LCD2004
     //
     void DrawDigit ( const int digit, const int x, const int width = 4 );
 
+    //
+    //  Print_Delay () -- Display the user specified character on the
+    //                    LCD using the user specified delay :
+    //
+    void Print_Delay ( const uint8_t delayValue, const uint8_t ch );
+
 
     //-----------------------------------------------------------------
 
@@ -157,77 +167,6 @@ class cMyDisplay_LCD2004
     cMyDisplay_LCD2004 ( void );
 
     //
-    //  ClearScreen () -- Routine to clear the display :
-    //
-    void ClearScreen ( void );
-
-    //
-    //  DisplaySplashScreen () -- Display our splash (initial) screen :
-    //
-    void DisplaySplashScreen ( void );
-
-    //
-    //  DisplayMessage2 () -- Display the user specified messages on our LCD :
-    //
-    void DisplayMessage2 (  const char* MesgPart1,
-                            const char* MesgPart2 = nullptr );
-
-    //
-    //  DisplayMessage3 () -- Display the user specified messages on our display :
-    //
-    void DisplayMessage3 (  const char* MesgPart1,
-                            const char* MesgPart2     = nullptr,
-                            const char* MesgPart3     = nullptr,
-                            const bool  ForceToBottom = true );
-
-    //
-    //  DisplayTime () -- Display the time on our LCD :
-    //
-    void DisplayTime ( const int hours, const int minutes, const int seconds = 0 );
-
-    //
-    //  Print () -- Display the user specified text on the LCD :
-    //
-    void Print ( const char* text );
-
-    //
-    //  Print () -- Display the user specified character on the LCD :
-    //
-    void Print ( const uint8_t ch );
-
-    //
-    //  Print_Delay () -- Display the user specified character on the LCD :
-    //
-    void Print_Delay ( const uint8_t delayValue, const uint8_t ch );
-
-    //
-    //  Printf () -- Display the variable parameter user specified text on the LCD :
-    //
-    void Printf ( const char* format, ... );
-
-    //
-    //  SetCursor () -- Move the cursor to the specified location :
-    //
-    //    *** Note the parameter order is "row, column", not "column, row" ***
-    //
-    void SetCursor ( const uint16_t row, const uint16_t column );
-
-    //
-    //  SetObjectSerialCmd () -- Routine to specify optional SerialCommand object :
-    //
-    void SetObjectSerialCmd ( SerialCommand* SerialCmd = nullptr );
-
-    //
-    //  Write () -- Display the user specified character on the LCD :
-    //
-    void Write ( const byte ch );
-
-    //
-    //  Write () -- Display the user specified text on the LCD :
-    //
-    void Write ( const char* text );
-
-    //
     //  setup () -- Routine to setup our display :
     //
     void setup ( void );
@@ -237,8 +176,83 @@ class cMyDisplay_LCD2004
     //
     void handle ( void );
 
+
+    //-----------------------------------------------------------------
+    //
+    //  Pure virtual functions defined in this class
+    //
+    //-----------------------------------------------------------------
+
+    //
+    //  ClearScreen () -- Routine to clear the display :
+    //
+    void ClearScreen ( void ) override;
+
+    //
+    //  DisplaySplashScreen () -- Display our splash (initial) screen :
+    //
+    void DisplaySplashScreen ( void ) override;
+
+    //
+    //  DisplayMessage2 () -- Display the user specified messages on our LCD :
+    //
+    void DisplayMessage2 (  const char* MesgPart1,
+                            const char* MesgPart2 = nullptr ) override;
+
+    //
+    //  DisplayMessage3 () -- Display the user specified messages on our display :
+    //
+    void DisplayMessage3 (  const char* MesgPart1,
+                            const char* MesgPart2     = nullptr,
+                            const char* MesgPart3     = nullptr,
+                            const bool  ForceToBottom = true ) override;
+
+    //
+    //  DisplayTime () -- Display the time on our LCD :
+    //
+    void DisplayTime ( const int hours, const int minutes, const int seconds = 0 ) override;
+
+    //
+    //  Print () -- Display the user specified text on the LCD :
+    //
+    void Print ( const char* text ) override;
+
+    //
+    //  Print () -- Display the user specified character on the LCD :
+    //
+    void Print ( const uint8_t ch ) override;
+
+    //
+    //  Printf () -- Display the variable parameter user specified text on the LCD :
+    //
+    void Printf ( const char* format, ... ) override;
+
+    //
+    //  SetCursor () -- Move the cursor to the specified location :
+    //
+    //    *** Note the parameter order is "row, column", not "column, row" ***
+    //
+    void SetCursor ( const uint16_t row, const uint16_t column ) override;
+
+    //
+    //  SetObjectSerialCmd () -- Routine to specify optional SerialCommand object :
+    //
+    void SetObjectSerialCmd ( SerialCommand* SerialCmd = nullptr ) override;
+
+    //
+    //  Write () -- Display the user specified character on the LCD :
+    //
+    void Write ( const byte ch ) override;
+
+    //
+    //  Write () -- Display the user specified text on the LCD :
+    //
+    void Write ( const char* text ) override;
+
 }; // cMyDisplay_LCD2004
 
+
+#endif  // USE_DISPLAY_LCD2004
 
 #endif  // !_MY_DISPLAY_LCD2004_H_
 

@@ -2,11 +2,15 @@
 //
 //  main.cpp
 //
-//      Version 1.2
+//      Version 1.4
 //
 //----------------------------------------------------------------------------
 //
 //  History :
+//
+//      Ver 1.4 : 2026/03/11
+//          - Changed display code so that cMyDisplay_LCD2004 is a derived
+//            class of cMyDisplay.
 //
 //      Ver 1.3 : 2026/03/01
 //          - Added code to search open WiFi networks.
@@ -156,7 +160,7 @@
 //  Single instances of some objects :
 //
 //SimpleTimer     g_Timer;        // Timer for sending messages to the MQTT broker.
-cMyDisplay      g_Display;      // One instance of the display object.
+//cMyDisplay      g_Display;      // One instance of the display object.
 cMyRTC          g_RTC;          // One instance of the Real Time Clock (RTC) object.
 cMyWiFi         g_WiFi;         // One instance of the WiFi object.
 SerialCommand   g_SerialCmd;    // Serial port command line interface.
@@ -240,11 +244,11 @@ void cb_WiFi_Connecting (   const int   index,              // Index into WiFi.R
     MyPrintf ( "[cb_WiFi_Connecting]  Called : Idx # %d / AP = [%s].\n", index, ssid );
 
 
-    //                          "--------------------"
-    g_Display.DisplayMessage3 ( buf,                        // Row 0 (see above).
-                                "",                         // Row 1.
-                                ssid,                       // Row 2 (SSID).
-                                false );                    // Do not force SSID to the bottom row.
+    //                           "--------------------"
+    g_Display->DisplayMessage3 ( buf,                        // Row 0 (see above).
+                                 "",                         // Row 1.
+                                 ssid,                       // Row 2 (SSID).
+                                 false );                    // Do not force SSID to the bottom row.
 }
 
 
@@ -282,10 +286,10 @@ void cb_WiFi_NoUsableNetwork ( void )
     {
         MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Displaying stuff on the display just this one time.\n" );
 
-        //                          "--------------------"
-        g_Display.DisplayMessage3 ( "No usable networks",
-                                    "found.",
-                                    "" );
+        //                           "--------------------"
+        g_Display->DisplayMessage3 ( "No usable networks",
+                                     "found.",
+                                     "" );
 
         delay ( 2000 );
 
@@ -306,10 +310,10 @@ void cb_WiFi_ScanningForNetworks ( void )
     MyPrintf ( "[cb_WiFi_ScanningForNetworks]  ------------------------------------------\n" );
     MyPrintf ( "[cb_WiFi_ScanningForNetworks]  Called.\n" );
 
-    //                          "--------------------"
-    g_Display.DisplayMessage3 ( "Scanning for WiFi",
-                                "networks.",
-                                "Please wait..." );
+    //                           "--------------------"
+    g_Display->DisplayMessage3 ( "Scanning for WiFi",
+                                 "networks.",
+                                 "Please wait..." );
 
     delay ( 2000 );
 }
@@ -327,10 +331,10 @@ void cb_WiFi_SearchingForOpenNetwork ( void )
     MyPrintf ( "[cb_WiFi_SearchingForOpen]  ------------------------------------------\n" );
     MyPrintf ( "[cb_WiFi_SearchingForOpen]  Called.\n" );
 
-    //                          "--------------------"
-    g_Display.DisplayMessage3 ( "Searching for an",
-                                "open network.",
-                                "Please wait..." );
+    //                           "--------------------"
+    g_Display->DisplayMessage3 ( "Searching for an",
+                                 "open network.",
+                                 "Please wait..." );
 
     delay ( 2000 );
 }
@@ -348,10 +352,10 @@ void cb_WiFi_SearchingForPreferredNetwork ( void )
     MyPrintf ( "[cb_WiFi_SearchingForPreferred]  ------------------------------------------\n" );
     MyPrintf ( "[cb_WiFi_SearchingForPreferred]  Called.\n" );
 
-    //                          "--------------------"
-    g_Display.DisplayMessage3 ( "Searching for a",
-                                "preferred network.",
-                                "Please wait..." );
+    //                           "--------------------"
+    g_Display->DisplayMessage3 ( "Searching for a",
+                                 "preferred network.",
+                                 "Please wait..." );
 
     delay ( 2000 );
 }
@@ -402,9 +406,9 @@ void setup ( void )
     //
     //  Initialize our display object :
     //
-    g_Display.setup ();
-    g_Display.SetObjectSerialCmd ( &g_SerialCmd );
-    g_Display.DisplaySplashScreen ();
+    g_Display->setup ();
+    g_Display->SetObjectSerialCmd ( &g_SerialCmd );
+    g_Display->DisplaySplashScreen ();
 
 
     //
@@ -428,7 +432,7 @@ void setup ( void )
         MyPrintf ( "[setup]  *** Unable to initialize the RTC -- Ignoring future RTC operations ***\n" );
 
         //                          "--------------------"
-        g_Display.DisplayMessage3 ( g_WiFi.MyHostname(),
+        g_Display->DisplayMessage3 ( g_WiFi.MyHostname(),
                                     "",
                                     "* Cannot find RTC *",
                                     false );
@@ -467,7 +471,7 @@ void setup ( void )
     //
     //  Clear the display :
     //
-    g_Display.ClearScreen ();
+    g_Display->ClearScreen ();
 
 
 #if 0   // RTC stuff -- DEBUG HACK
@@ -523,7 +527,7 @@ void loop ( void )
     //  Handle events and such :
     //
     events();                       // ezTime.cpp -- ezTime background tasks
-    g_Display.handle ();            // Display driver.
+    g_Display->handle ();           // Display driver.
     g_RTC.handle ();                // RTC (Real Time Clock) driver.
     g_WiFi.handle ();               // WiFi driver.
 
@@ -543,7 +547,7 @@ void loop ( void )
         //
         success = g_WiFi.Connect ();
 
-        g_Display.ClearScreen ();
+        g_Display->ClearScreen ();
 
         //
         //  If successful, then force us to get the time now :
@@ -584,10 +588,10 @@ void loop ( void )
                 //
                 //  Display some WiFi information on the LCD display :
                 //
-                //                          "--------------------"
-                g_Display.DisplayMessage3 ( "Connected to WiFi :",
-                                            WiFi.SSID().c_str(),
-                                            WiFi.localIP().toString().c_str() );
+                //                           "--------------------"
+                g_Display->DisplayMessage3 ( "Connected to WiFi :",
+                                             WiFi.SSID().c_str(),
+                                             WiFi.localIP().toString().c_str() );
 
                 delay ( 4000 );
             }
@@ -649,8 +653,8 @@ void loop ( void )
     {
         MyPrintf ( "[Loop]  Trying to get the time...\n" );
 
-        //                          "--------------------"
-        g_Display.DisplayMessage3 ( "Connected to WiFi :",
+        //                           "--------------------"
+        g_Display->DisplayMessage3 ( "Connected to WiFi :",
                                      WiFi.SSID().c_str(),
                                      "Getting the time..." );
 
@@ -704,7 +708,7 @@ void loop ( void )
 
         MyPrintf ( "[Loop]  Continuing...\n" );
 
-        g_Display.ClearScreen ();
+        g_Display->ClearScreen ();
 
         //
         //  Try to get the time again based on how many time we've
@@ -766,7 +770,7 @@ void loop ( void )
         //
         //  Now display the time on our display :
         //
-        g_Display.DisplayTime ( h, m, curTzSec );
+        g_Display->DisplayTime ( h, m, curTzSec );
 
     } // if
 

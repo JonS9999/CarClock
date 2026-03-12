@@ -185,7 +185,7 @@ bool cMyWiFi::Connect ( void )
 
                     MyPrintf ( "[WiFi::Connect]  Found priority %d: [%s].  Connecting...", (slot + 1), WIFI_PREFERRED[slot].SSID );
 
-                    WiFi.begin(WIFI_PREFERRED[slot].SSID, WIFI_PREFERRED[slot].passwd);
+                    WiFi.begin ( WIFI_PREFERRED[slot].SSID, WIFI_PREFERRED[slot].passwd) ;
 
                     // Wait up to 10s for connection
                     unsigned long start = millis();

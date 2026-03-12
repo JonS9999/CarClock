@@ -35,6 +35,17 @@
 
 
 //
+//  *Must* include Common.h first :
+//
+#include "Common.h"
+
+//
+//  Are we using this type of display ?
+//
+#ifdef  USE_DISPLAY_LCD2004
+
+
+//
 //  System include files :
 //
 #include <Arduino.h>
@@ -43,10 +54,20 @@
 //
 //  Local include files :
 //
-#include "Common.h"
 #include "MyDisplay.h"
 #include "MyDisplay_LCD2004.h"
 #include "MyWiFi.h"                         // For cMyWiFi.
+
+
+//----------------------------------------------------------------------------
+//
+//  One instance of the cDisplay_LCD2004 object :
+//
+//----------------------------------------------------------------------------
+
+static cMyDisplay_LCD2004   s_Display_LCD2004;
+
+cMyDisplay* g_Display       = &s_Display_LCD2004;
 
 
 //----------------------------------------------------------------------------
@@ -1431,6 +1452,15 @@ void cMyDisplay_LCD2004::setup ( void )
     int     status;
 
 
+    //--------------------------------------------------------------------
+    //
+    //  Call the base class's setup() routine :
+    //
+    //--------------------------------------------------------------------
+
+    cMyDisplay::setup ();
+
+
     MyPrintf ( "[Display_LCD2004::setup]  Called.\n" );
 
     MyPrintf ( "[Display_LCD2004::setup]  LED_BUILTIN pin = %d.\n", LED_BUILTIN );
@@ -1534,6 +1564,15 @@ void cMyDisplay_LCD2004::handle ( void )
     //static uint32_t s_LastTextScreenTime    = 0;
     static char     s_OldColonChar          = '-';
     bool            debug_DisplayTextScreen = false;
+
+
+    //--------------------------------------------------------------------
+    //
+    //  Call the base class's handle() routine :
+    //
+    //--------------------------------------------------------------------
+
+    cMyDisplay::handle ();
 
 
     //--------------------------------------------------------------------
@@ -1724,6 +1763,9 @@ void cMyDisplay_LCD2004::handle ( void )
         // TextScreen_Display ();              // DEBUG HACK
     }
 }
+
+
+#endif  // USE_DISPLAY_LCD2004
 
 
 //----------------------------------------------------------------------------

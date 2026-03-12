@@ -7,7 +7,7 @@
 //
 //    Jon Scheer (2026)
 //
-//    Rev 1.0
+//    Rev 1.1
 //
 //----------------------------------------------------------------------------
 
@@ -27,11 +27,6 @@
 //
 #include "Common.h"
 
-#ifdef  USE_DISPLAY_LCD2004
-#include "MyDisplay_LCD2004.h"          // Hitachi 20x4 LCD display.
-#endif
-
-
 
 //-----------------------------------------------------------------------------
 //
@@ -41,23 +36,12 @@
 
 class cMyDisplay
 {
-  private :
+  protected :
 
     //
     //  m_IsInitialized -- Flag used track if we've been initialized yet or not.
     //
     bool  m_IsInitialized;
-
-    //-----------------------------------------------------------------
-
-#ifdef  USE_DISPLAY_LCD2004
-
-    //
-    //  One instance of the LCD2004 display driver :
-    //
-    cMyDisplay_LCD2004  m_Display;
-
-#endif  // USE_DISPLAY_LCD2004
 
     //-----------------------------------------------------------------
 
@@ -68,84 +52,100 @@ class cMyDisplay
     //
     cMyDisplay ( void );
 
+
+    //
+    //  setup () -- Routine to setup our display :
+    //
+    virtual void setup ( void );
+
+
+    //
+    //  handle () -- Routine to check for updates to our display :
+    //
+    virtual void handle ( void );
+
+
+    //-----------------------------------------------------------------
+    //
+    //  Pure virtual functions (*MUST* be defined in derived class)
+    //
+    //-----------------------------------------------------------------
+
     //
     //  ClearScreen () -- Routine to clear the display :
     //
-    void ClearScreen ( void );
+    virtual void ClearScreen ( void ) = 0;
 
     //
     //  DisplaySplashScreen () -- Display our splash (initial) screen :
     //
-    void DisplaySplashScreen ( void );
+    virtual void DisplaySplashScreen ( void ) = 0;
 
     //
     //  DisplayMessage2 () -- Display the user specified messages on our display :
     //
-    void DisplayMessage2 (  const char* MesgPart1,
-                            const char* MesgPart2 = nullptr );
+    virtual void DisplayMessage2 (  const char* MesgPart1,
+                                    const char* MesgPart2 = nullptr )     = 0;
 
     //
     //  DisplayMessage3 () -- Display the user specified messages on our display :
     //
-    void DisplayMessage3 (  const char* MesgPart1,
-                            const char* MesgPart2     = nullptr,
-                            const char* MesgPart3     = nullptr,
-                            const bool  ForceToBottom = true );
+    virtual void DisplayMessage3 (  const char* MesgPart1,
+                                    const char* MesgPart2     = nullptr,
+                                    const char* MesgPart3     = nullptr,
+                                    const bool  ForceToBottom = true )    = 0;
 
     //
     //  DisplayTime () -- Display the time on our LCD :
     //
-    void DisplayTime ( const int hours, const int minutes, const int seconds = 0 );
+    virtual void DisplayTime (  const int   hours,
+                                const int   minutes,
+                                const int   seconds   = 0 )     = 0;
 
     //
     //  Print () -- Display the user specified text on the LCD :
     //
-    void Print ( const char* text );
+    virtual void Print ( const char* text ) = 0;
 
     //
     //  Print () -- Display the user specified character on the LCD :
     //
-    void Print ( const uint8_t ch );
+    virtual void Print ( const uint8_t ch ) = 0;
 
     //
     //  Printf () -- Display the variable parameter user specified text on the LCD :
     //
-    void Printf ( const char* format, ... );
+    virtual void Printf ( const char* format, ... ) = 0;
 
     //
     //  SetCursor () -- Move the cursor to the specified location :
     //
     //    *** Note the parameter order is "row, column", not "column, row" ***
     //
-    void SetCursor ( const uint16_t row, const uint16_t column );
+    virtual void SetCursor ( const uint16_t row, const uint16_t column ) = 0;
 
     //
     //  SetSerialCmdObject () -- Routine to specify optional SerialCommand object :
     //
-    void SetObjectSerialCmd ( SerialCommand* SerialCmd = nullptr );
+    virtual void SetObjectSerialCmd ( SerialCommand* SerialCmd = nullptr ) = 0;
 
     //
     //  Write () -- Display the user specified character on the LCD :
     //
-    void Write ( const byte ch );
+    virtual void Write ( const byte ch ) = 0;
 
     //
     //  Write () -- Display the user specified text on the LCD :
     //
-    void Write ( const char* text );
-
-    //
-    //  setup () -- Routine to setup our display :
-    //
-    void setup ( void );
-
-    //
-    //  handle () -- Routine to check for updates to our display :
-    //
-    void handle ( void );
+    virtual void Write ( const char* text ) = 0;
 
 }; // cMyDisplay
 
+
+//
+//  External declaration for singleton (one instance of) g_Display object :
+//
+extern cMyDisplay*  g_Display;
 
 #endif  // !_MY_DISPLAY_H_
 
