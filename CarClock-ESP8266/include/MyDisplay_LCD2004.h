@@ -18,8 +18,8 @@
 //  System include files :
 //
 #include <Arduino.h>
-#include <Wire.h>
-#include <hd44780.h>
+#include <Wire.h>                           // For I2C support.
+#include <hd44780.h>                        // Hitachi LCD 2004 display.
 #include <hd44780ioClass/hd44780_I2Cexp.h>  // I2C expander I/O class header.
 #include <SerialCommand.h>                  // Serial/USB port command line interface.
 

@@ -2,7 +2,34 @@
 //
 //  MyDisplay_LCD2004.cpp -- Display driver for Hitachi 20x4 LCD display.
 //
-//      Version 1.0
+//      Version 1.1
+//
+//----------------------------------------------------------------------------
+//
+//      The "time display" screen looks like this :
+//
+//           01234567890123456789
+//          +--------------------+
+//        0 |.DD.DDDD...DDDD.DDDD|
+//        1 |..D.DDDD.C.DDDD.DDDD|
+//        2 |S.D.DDDD.c.DDDD.DDDD|
+//        3 |s.D.DDDD...DDDD.DDDD|
+//          +--------------------+
+//
+//      Where :
+//
+//          D = Digit (0-9).  Note that the left most digit is narrower
+//              than the other three digits.  This is because the left
+//              most digit will only be "1" if the time is between 10:00
+//              and 12:59.
+//
+//          C = Colon (top part).
+//
+//          c = Colon (bottom part).
+//
+//          S = Seconds field (tens unit).
+//
+//          s = Seconds field (ones unit).
 //
 //----------------------------------------------------------------------------
 
@@ -1286,7 +1313,7 @@ void cMyDisplay_LCD2004::SetCursor ( const uint16_t row, const uint16_t column )
     if ( m_LcdIsPresent == true )
     {
         m_LCD.setCursor ( column, row );
-        delay ( 10 );
+        delay ( 12 );
     }
 
 
@@ -1400,6 +1427,7 @@ void cMyDisplay_LCD2004::setup ( void )
     //
     //  Local variables :
     //
+    char    buf[30];
     int     status;
 
 
@@ -1409,6 +1437,22 @@ void cMyDisplay_LCD2004::setup ( void )
     MyPrintf ( "[Display_LCD2004::setup]  LCD I2C SCL pin = %d.\n", LCD_I2C_SCL_PIN );
     MyPrintf ( "[Display_LCD2004::setup]  LCD I2C SDA pin = %d.\n", LCD_I2C_SDA_PIN );
     MyPrintf ( "[Display_LCD2004::setup]  LCD I2C address = 0x%02x.\n", LCD_I2C_ADDR );
+
+#ifdef  SCL
+    snprintf ( buf, sizeof(buf), "%d", SCL );
+#else
+    snprintf ( buf, sizeof(buf), "<Undefined>" );
+#endif  // !SCL
+
+    MyPrintf ( "[Display_LCD2004::setup]  Def I2C SCL pin = %s.\n", buf );
+
+#ifdef  SDA
+    snprintf ( buf, sizeof(buf), "%d", SDA );
+#else
+    snprintf ( buf, sizeof(buf), "<Undefined>" );
+#endif  // !SDA
+
+    MyPrintf ( "[Display_LCD2004::setup]  Def I2C SDA pin = %s.\n", buf );
 
 
     //
@@ -1488,6 +1532,7 @@ void cMyDisplay_LCD2004::handle ( void )
     static bool     s_OldDisplayingTime     = false;
     static uint32_t s_LastMillis            = 0;
     //static uint32_t s_LastTextScreenTime    = 0;
+    static char     s_OldColonChar          = '-';
     bool            debug_DisplayTextScreen = false;
 
 
@@ -1563,6 +1608,20 @@ void cMyDisplay_LCD2004::handle ( void )
 
                 //--------------------------------------------------------
                 //
+                //  In this version, the bottom part of the colon simply
+                //  mimics the top of part of the colon.  The status of
+                //  various things (time, weather, etc) is now displayed
+                //  in the top left corner of the display, so we don't
+                //  need to do anything special with the bottom part of
+                //  the colon.                          -JonS 2026/03/11
+                //
+                //--------------------------------------------------------
+
+                colon_bottom    = colon_top;    // Use same character as the top part of the colon.
+
+#if 0   // Pivoting...  The bottom part of the colon mimics the top part.
+                //--------------------------------------------------------
+                //
                 //  Determine what to use for the bottom half of the
                 //  colon.  It is based on if we were able to get the
                 //  time, messages, weather, etc :
@@ -1588,8 +1647,21 @@ void cMyDisplay_LCD2004::handle ( void )
                 {
                     colon_bottom    = '*';      // Connected -- FOR NOW JUST DO THIS.
                 }
+#endif  // Pivoting...  The bottom part of the colon mimics the top part.
 
-                //MyPrintf ( "[Display_LCD2004::handle]  Colon = [%c] [%c].\n", colon_top, colon_bottom );     // DEBUG HACK
+                //
+                //  Did the colon change ?
+                //
+                if ( s_OldColonChar != colon_top )
+                {
+                    MyPrintf ( "[Display_LCD2004::handle]  Colon was [%c] [%c] / Now [%c] [%c].\n",
+                        s_OldColonChar,
+                        s_OldColonChar,
+                        colon_top,
+                        colon_bottom );
+
+                    s_OldColonChar = colon_top;
+                }
             }
             else
             {

@@ -392,9 +392,9 @@ void setup ( void )
     for ( int i = 0 ; i < 3 ; i++ )
     {
         digitalWrite ( LED_BUILTIN, HIGH );
-        delay ( 100 );
+        delay ( 50 );
         digitalWrite ( LED_BUILTIN, LOW );
-        delay ( 100 );
+        delay ( 50 );
     }
 #endif
 
