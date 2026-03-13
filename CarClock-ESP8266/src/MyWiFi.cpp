@@ -2,7 +2,7 @@
 //
 //  MyWiFi.cpp --
 //
-//      Version 1.0
+//      Version 1.1
 //
 //----------------------------------------------------------------------------
 
@@ -49,6 +49,7 @@ cMyWiFi::cMyWiFi ( void )
   m_HostEncryptionType                      = ENC_TYPE_NONE;
 
   m_Callback_Connecting                     = NULL;
+  m_Callback_ConnectingAttempt              = NULL;
   m_Callback_NoUsableNetwork                = NULL;
   m_Callback_ScanningForNetworks            = NULL;
   m_Callback_SearchingForOpenNetwork        = NULL;
@@ -60,7 +61,114 @@ cMyWiFi::cMyWiFi ( void )
 
 //----------------------------------------------------------------------------
 //
-//  Connect () -- Routine to connect to a WiFi network.
+//  ConnectTo () --  Routine to scan for WiFi networks and and attempt to
+//                   connect to one of them WiFi network :
+//
+//----------------------------------------------------------------------------
+
+bool cMyWiFi::ConnectTo (   const int       wifiIndex,
+                            const char*     SSID,
+                            const char*     passwd )
+{
+    //
+    //  Local variables :
+    //
+    uint8_t     connectionTick      = 0;            // Used when attempting to connect to WiFi.
+
+#define MAX_CONNECT_TIMEOUT         (10000)         // Maximum number of seconds to wait while connecting.
+#define MAX_CONNECT_TICKS           (15)            // Maximum number of screen updates to do while waiting.
+#define CONNECTION_ATTEMPT_DELAY    (MAX_CONNECT_TIMEOUT / MAX_CONNECT_TICKS)    // How long to wait for each tick.
+
+
+    MyPrintf ( "[WiFi::ConnectTo]  Called : SSID = [%s] / Network index = %d / Type = %s.\n",
+            SSID,
+            wifiIndex,
+            ( (WiFi.encryptionType(wifiIndex) == ENC_TYPE_NONE) ? "OPEN" : "SECURE" ) );
+
+    //
+    //  Call the optional user specified 'connecting' callback :
+    //
+    if ( m_Callback_Connecting != NULL )
+    {
+        MyPrintf ( "[WiFi::ConnectTo]  +++ Calling 'connecting' callback +++\n" );
+        (*m_Callback_Connecting) ( SSID, passwd );
+        MyPrintf ( "[WiFi::ConnectTo]  +++ Back from 'connecting' callback +++\n" );
+    }
+
+
+    MyPrintf ( "[WiFi::ConnectTo]  Waiting a maximum of %u seconds for connection...\n", uint8_t(MAX_CONNECT_TIMEOUT / 1000) );
+
+
+    //
+    //  Now try to connect to the user specified network :
+    //
+    WiFi.begin ( SSID, passwd );
+    //WiFi.begin ( WIFI_PREFERRED[slot].SSID, WIFI_PREFERRED[slot].passwd) ;
+
+
+    //
+    //  Loop a while until we connect or until we timeout :
+    //
+    connectionTick = 0;
+
+    while ( (WiFi.status() != WL_CONNECTED) && (connectionTick < MAX_CONNECT_TICKS) )
+    {
+        //
+        //  Call the optional user specified 'connecting attempt' callback :
+        //
+        if ( m_Callback_ConnectingAttempt != NULL )
+        {
+            //MyPrintf ( "[WiFi::ConnectTo]  +++ Calling 'connecting attempt' callback +++\n" );
+            (*m_Callback_ConnectingAttempt) ( connectionTick, MAX_CONNECT_TICKS );
+            //MyPrintf ( "[WiFi::ConnectTo]  +++ Back from 'connecting attempt' callback +++\n" );
+        }
+        else
+        {
+            Serial.print ( "." );
+        }
+
+        delay ( CONNECTION_ATTEMPT_DELAY );
+
+        connectionTick++;
+
+    } // while
+
+    if ( m_Callback_ConnectingAttempt == NULL )
+    {
+        Serial.printf ( "\n" );
+    }
+
+
+    //
+    //  If we have successfully connected to the network, then
+    //  do a little house-keeping and return now :
+    //
+    if ( WiFi.status() == WL_CONNECTED )
+    {
+        MyPrintf ( "[WiFi::ConnectTo]  Connected!\n" );
+        config.isConnected = true;
+
+        strncpy ( m_HostSSID, SSID, sizeof(m_HostSSID) );
+        m_HostSSID[sizeof(m_HostSSID)-1] = '\0';
+
+        m_HostEncryptionType = WiFi.encryptionType(wifiIndex);
+
+        displayWifiStatus();
+
+        return ( true );
+    }
+
+
+    MyPrintf ( "[WiFi::ConnectTo]  Connection to [%s] failed.\n", SSID );
+
+    return ( false );
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  Connect () --  Routine to scan for WiFi networks and and attempt to
+//                 connect to one of them WiFi network :
 //
 //----------------------------------------------------------------------------
 
@@ -69,8 +177,11 @@ bool cMyWiFi::Connect ( void )
     //
     //  Local variables :
     //
-    char    buf[30];                        // Temporary text buffer.
-    bool    firstTime       = true;         // First time we try something?
+    char        buf[30];                            // Temporary text buffer.
+    bool        firstTime           = true;         // First time we try something?
+    bool        status              = false;        // Did we successfully connect to a WiFi network?
+    uint8_t     numOpenNetworks     = 0;            // Number of open networks we found.
+    uint8_t     numSecureNetworks   = 0;            // Number of secure networks we found.
 
 
     //-----------------------------------------------------------------------
@@ -97,7 +208,10 @@ bool cMyWiFi::Connect ( void )
     int n = WiFi.scanNetworks();
     MyPrintf ( "[WiFi::Connect]  Found %d networks.\n", n );
 
-#if 1
+
+    //
+    //  Use this to count the number of secure and open networks :
+    //
     MyPrintf ( "[WiFi::Connect]           En                SSID               RSSI  Sec\n" );
     MyPrintf ( "[WiFi::Connect]           -- - ------------------------------  ----  ---\n" );
 
@@ -110,14 +224,27 @@ bool cMyWiFi::Connect ( void )
             buf,
             WiFi.RSSI(i),
             ( (WiFi.encryptionType(i) == ENC_TYPE_NONE) ? ' ' : '*') );
-    }
-#endif
+
+        if ( WiFi.encryptionType(i) == ENC_TYPE_NONE )
+        {
+            numOpenNetworks++;
+        }
+        else
+        {
+            numSecureNetworks++;
+        }
+    } // for
+
 
     if ( n <= 0 )
     {
         MyPrintf ( "[WiFi::Connect]  No networks found.\n" );
         return ( false );
     }
+
+    MyPrintf ( "[WiFi::Connect]  %u secure networks found / %u open networks found.\n",
+            numSecureNetworks,
+            numOpenNetworks );
 
 
     //
@@ -130,7 +257,7 @@ bool cMyWiFi::Connect ( void )
     //
     //  Loop through our list of preferred networks :
     //
-    for (int slot = 0 ; slot < NUM_WIFI_PREFERRED ; slot++ )
+    for ( int slot = 0 ; slot < NUM_WIFI_PREFERRED ; slot++ )
     {
         //-----------------------------------------------------------------------
         //
@@ -173,48 +300,24 @@ bool cMyWiFi::Connect ( void )
                 if ( (strlen(WIFI_PREFERRED[slot].passwd) > 0) &&   // Preferred network is secure (has a password).
                      (WiFi.encryptionType(i) != ENC_TYPE_NONE) )    // Found network is secure (not open).
                 {
-                    //
-                    //  Call the optional user specified 'connecting' callback :
-                    //
-                    if ( m_Callback_Connecting != NULL )
-                    {
-                        MyPrintf ( "[WiFi::Connect]  +++ Calling 'connecting' callback +++\n" );
-                        (*m_Callback_Connecting) ( i, WIFI_PREFERRED[slot].SSID );
-                        MyPrintf ( "[WiFi::Connect]  +++ Back from 'connecting' callback +++\n" );
-                    }
-
                     MyPrintf ( "[WiFi::Connect]  Found priority %d: [%s].  Connecting...", (slot + 1), WIFI_PREFERRED[slot].SSID );
 
-                    WiFi.begin ( WIFI_PREFERRED[slot].SSID, WIFI_PREFERRED[slot].passwd) ;
+                    //
+                    //  Try to connect to this network :
+                    //
+                    status = ConnectTo ( i, WIFI_PREFERRED[slot].SSID, WIFI_PREFERRED[slot].passwd );
 
-                    // Wait up to 10s for connection
-                    unsigned long start = millis();
-                    while ( (WiFi.status() != WL_CONNECTED) && ((millis() - start) < 10000)) {
-                        delay(500);
-                        Serial.print(".");
-                    }
-                    Serial.printf ( "\n" );
+                    MyPrintf ( "[WiFi::Connect]  Connection to [%s] %s.\n",
+                            WIFI_PREFERRED[slot].SSID,
+                            ( (status == true) ? "successful" : "failed" ) );
 
                     //
-                    //  If we have successfully connected to the network, then
-                    //  do a little house-keeping and return now :
+                    //  Return now if we were successful :
                     //
-                    if ( WiFi.status() == WL_CONNECTED )
+                    if ( status == true )
                     {
-                        MyPrintf ( "[WiFi::Connect]  Connected!\n" );
-                        config.isConnected = true;
-
-                        strncpy ( m_HostSSID, WiFi.SSID(i).c_str(), sizeof(m_HostSSID) );
-                        m_HostSSID[sizeof(m_HostSSID)-1] = '\0';
-
-                        m_HostEncryptionType = WiFi.encryptionType(i);
-
-                        displayWifiStatus();
-
                         return ( true );
                     }
-
-                    MyPrintf ( "[WiFi::Connect]  Connection failed.\n" );
                 }
                 else
                 {
@@ -263,14 +366,32 @@ bool cMyWiFi::Connect ( void )
                 firstTime =  false;
             }
 
+            //
+            //  Try to connect to this open network :
+            //
+            status = ConnectTo ( i, WiFi.SSID(i).c_str() );
 
+            MyPrintf ( "[WiFi::Connect]  Connection to [%s] %s.\n",
+                    WiFi.SSID(i).c_str(),
+                    ( (status == true) ? "successful" : "failed" ) );
+
+            //
+            //  Return now if we were successful :
+            //
+            if ( status == true )
+            {
+                return ( true );
+            }
+
+
+#if 0   // OLD CODE
             //
             //  Call the optional user specified 'connecting' callback :
             //
             if ( m_Callback_Connecting != NULL )
             {
                 MyPrintf ( "[WiFi::Connect]  +++ Calling 'connecting' callback +++\n" );
-                (*m_Callback_Connecting) ( i, WiFi.SSID(i).c_str() );
+                (*m_Callback_Connecting) ( WiFi.SSID(i).c_str(), NULL );
                 MyPrintf ( "[WiFi::Connect]  +++ Back from 'connecting' callback +++\n" );
 
                 WiFi.begin ( WiFi.SSID(i).c_str() );
@@ -304,7 +425,10 @@ bool cMyWiFi::Connect ( void )
 
                 MyPrintf ( "[WiFi::Connect]  Connection failed.\n" );
             }
-        }
+
+#endif  // OLD CODE
+
+        } // if
     } // for
 
 
@@ -320,7 +444,7 @@ bool cMyWiFi::Connect ( void )
     if ( m_Callback_NoUsableNetwork != NULL )
     {
         MyPrintf ( "[WiFi::Connect]  +++ Calling 'no usable network found' callback +++\n" );
-        (*m_Callback_NoUsableNetwork) ();
+        (*m_Callback_NoUsableNetwork) ( numSecureNetworks, numOpenNetworks );
         MyPrintf ( "[WiFi::Connect]  +++ Back from 'no usable network found' callback +++\n" );
     }
 
@@ -569,8 +693,8 @@ const char* cMyWiFi::MyHostname ( void )
     //  Generate our hostname based on the last few digits of our MAC :
     //
     snprintf ( s_MyHostname, sizeof(s_MyHostname), "%s-%s",
-        PROJECT_NAME,                                           // Common.h
-        cMyWiFi::GetMacAddrLow() );                                      // WiFi.cpp
+                PROJECT_NAME,                                           // Common.h
+                cMyWiFi::GetMacAddrLow() );                             // WiFi.cpp
 
 
     //
@@ -586,7 +710,8 @@ const char* cMyWiFi::MyHostname ( void )
 //
 //-----------------------------------------------------------------------------
 
-void  cMyWiFi::SetCallback_Connecting ( void (*ptr) ( const int index, const char* ssid ) )
+void  cMyWiFi::SetCallback_Connecting ( void (*ptr) (   const char* SSID,
+                                                        const char* passwd ) )
 {
   MyPrintf ( "[WiFi::SetCallback_Connecting] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
 
@@ -596,11 +721,27 @@ void  cMyWiFi::SetCallback_Connecting ( void (*ptr) ( const int index, const cha
 
 //-----------------------------------------------------------------------------
 //
+//  Routine to set the 'connecting attempt' callback :
+//
+//-----------------------------------------------------------------------------
+
+void  cMyWiFi::SetCallback_ConnectingAttempt ( void (*ptr) (    const uint8_t   numAttemptsSoFar,
+                                                                const uint8_t   maxAttempts ) )
+{
+  MyPrintf ( "[WiFi::SetCallback_ConnectingAttempt] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
+
+  m_Callback_ConnectingAttempt = ptr;
+}
+
+
+//-----------------------------------------------------------------------------
+//
 //  Routine to set the 'no usable network found' callback :
 //
 //-----------------------------------------------------------------------------
 
-void  cMyWiFi::SetCallback_NoUsableNetwork ( void (*ptr) ( void ) )
+void  cMyWiFi::SetCallback_NoUsableNetwork ( void (*ptr) (  const uint8_t numSecureNetworks,
+                                                            const uint8_t numOpenNetworks ) )
 {
   MyPrintf ( "[WiFi::SetCallback_NoUsableNetwork] : Called : Callback = 0x%08X.\n", ( (ptr != NULL) ? ptr : 0x0000 ) );
 

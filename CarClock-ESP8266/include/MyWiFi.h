@@ -1,3 +1,16 @@
+//----------------------------------------------------------------------------
+//
+//  MyWiFi.h
+//
+//    WiFi driver code.
+//
+//    Jon Scheer (2026)
+//
+//    Rev 1.1
+//
+//----------------------------------------------------------------------------
+
+
 #ifndef _MY_WIFI_H_
 #define _MY_WIFI_H_
 
@@ -88,13 +101,20 @@ class cMyWiFi
     //
     //  Routine that we call when we are attempting to connect to the WiFi :
     //
-    void (*m_Callback_Connecting) (   const int   index,
-                                      const char* ssid );
+    void (*m_Callback_Connecting) (   const char* SSID,
+                                      const char* passwd );
+
+    //
+    //  Routine that we call while we are attempting to connect to the WiFi :
+    //
+    void (*m_Callback_ConnectingAttempt) (  const uint8_t   numAttemptsSoFar,
+                                            const uint8_t   maxAttempts );
 
     //
     //  Routine to set the 'no usable network found' callback :
     //
-    void (*m_Callback_NoUsableNetwork) ( void );
+    void (*m_Callback_NoUsableNetwork) (  const uint8_t    numSecureNetworks,
+                                          const uint8_t    numOpenNetworks );
 
     //
     //  Routine to set the 'scanning for networks' callback :
@@ -151,17 +171,21 @@ class cMyWiFi
 
   public :
 
-#if 1   // Make constructor private to force only one instance of it.
     //
     //  Constructor :
     //
     cMyWiFi ( void );
-#endif
-
-#if 1   // DEBUG HACK
 
     //
-    //  Routine to connect to a WiFi network :
+    //  Routine to connect to a specified WiFi network :
+    //
+    bool ConnectTo (  const int     wifiIndex,
+                      const char*   SSID,
+                      const char*   passwd    = NULL );
+
+    //
+    //  Routine to scan for WiFi networks and and attempt to connect
+    //  to one of them WiFi network :
     //
     bool Connect ( void );
 
@@ -201,12 +225,20 @@ class cMyWiFi
     //
     //  Routine to set the 'connecting' callback :
     //
-    void  SetCallback_Connecting ( void (*ptr) ( const int index, const char* ssid ) );
+    void  SetCallback_Connecting ( void (*ptr) (  const char* SSID,
+                                                  const char* passwd ) );
+
+    //
+    //  Routine to set the 'connecting attempt' callback :
+    //
+    void  SetCallback_ConnectingAttempt ( void (*ptr) ( const uint8_t   numAttemptsSoFar,
+                                                        const uint8_t   maxAttempts ) );
 
     //
     //  Routine to set the 'no usable network found' callback :
     //
-    void  SetCallback_NoUsableNetwork ( void (*ptr) ( void ) );
+    void  SetCallback_NoUsableNetwork ( void (*ptr) ( const uint8_t    numSecureNetworks,
+                                                      const uint8_t    numOpenNetworks ) );
 
     //
     //  Routine to set the 'scanning for networks' callback :
@@ -224,7 +256,7 @@ class cMyWiFi
     void  SetCallback_SearchingForPreferredNetwork ( void (*ptr) ( void ) );
 
     //
-    //  Routine to set the 'on connect' callback :
+    //  Routine to set the 'on connect' callback :t
     //
     void  SetCallbackOnConnect ( void (*ptr) ( void ) );
 
@@ -597,8 +629,6 @@ class cMyWiFi
     {
       m_WiFi_OTA.setup ( m_MyHostname );
     }
-
-#endif  // DEBUG HACK
 
 };  // cMyWiFi
 

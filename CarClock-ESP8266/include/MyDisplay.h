@@ -7,7 +7,7 @@
 //
 //    Jon Scheer (2026)
 //
-//    Rev 1.1
+//    Rev 1.2
 //
 //----------------------------------------------------------------------------
 
@@ -51,18 +51,6 @@ class cMyDisplay
     //  Constructor :
     //
     cMyDisplay ( void );
-
-
-    //
-    //  setup () -- Routine to setup our display :
-    //
-    virtual void setup ( void );
-
-
-    //
-    //  handle () -- Routine to check for updates to our display :
-    //
-    virtual void handle ( void );
 
 
     //-----------------------------------------------------------------
@@ -138,6 +126,49 @@ class cMyDisplay
     //  Write () -- Display the user specified text on the LCD :
     //
     virtual void Write ( const char* text ) = 0;
+
+
+    //-----------------------------------------------------------------
+    //
+    //  Virtual functions that can be defined in derived class
+    //
+    //-----------------------------------------------------------------
+
+    //
+    //  cb_WiFi_ConnectingAttempt () -- Callback routine which is
+    //      called when we are trying to connect to a WiFi network.
+    //      We are passed in the maximum number of attempts that will
+    //      be made and the number of attempts made so far.
+    //
+    virtual void cb_WiFi_ConnectingAttempt (  const uint8_t   numAttemptsSoFar,
+                                              const uint8_t   maxAttempts );
+
+
+    //
+    //  cb_WiFi_NoUsableNetwork () -- Callback routine which is called
+    //      when we tried to (but was unsuccessful) in connecting to
+    //      a WiFi network.
+    //
+    virtual void cb_WiFi_NoUsableNetwork (  const uint8_t   numSecureNetworks,
+                                            const uint8_t   numOpenNetworks );
+
+
+    //-----------------------------------------------------------------
+    //
+    //  Normal functions that are defined in this class
+    //
+    //-----------------------------------------------------------------
+
+    //
+    //  setup () -- Routine to setup our display :
+    //
+    virtual void setup ( void );
+
+
+    //
+    //  handle () -- Routine to check for updates to our display :
+    //
+    virtual void handle ( void );
 
 }; // cMyDisplay
 

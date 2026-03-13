@@ -6,7 +6,7 @@
 //
 //    Jon Scheer (2026)
 //
-//    Rev 1.1
+//    Rev 1.2
 //
 //----------------------------------------------------------------------------
 
@@ -166,16 +166,6 @@ class cMyDisplay_LCD2004 : public cMyDisplay
     //
     cMyDisplay_LCD2004 ( void );
 
-    //
-    //  setup () -- Routine to setup our display :
-    //
-    void setup ( void );
-
-    //
-    //  handle () -- Routine to check for updates to our display :
-    //
-    void handle ( void );
-
 
     //-----------------------------------------------------------------
     //
@@ -248,6 +238,47 @@ class cMyDisplay_LCD2004 : public cMyDisplay
     //  Write () -- Display the user specified text on the LCD :
     //
     void Write ( const char* text ) override;
+
+
+    //-----------------------------------------------------------------
+    //
+    //  Virtual functions that are defined in this class
+    //
+    //-----------------------------------------------------------------
+
+    //
+    //  cb_WiFi_ConnectingAttempt () -- Callback routine which is
+    //      called when we are trying to connect to a WiFi network.
+    //      We are passed in the maximum number of attempts that will
+    //      be made and the number of attempts made so far.
+    //
+    virtual void cb_WiFi_ConnectingAttempt (  const uint8_t   numAttemptsSoFar,
+                                              const uint8_t   maxAttempts );
+
+    //
+    //  cb_WiFi_NoUsableNetwork () -- Callback routine which is called
+    //      when we tried to (but was unsuccessful) in connecting to
+    //      a WiFi network.
+    //
+    virtual void cb_WiFi_NoUsableNetwork (  const uint8_t   numSecureNetworks,
+                                            const uint8_t   numOpenNetworks );
+
+
+    //-----------------------------------------------------------------
+    //
+    //  Normal functions that are defined in this class
+    //
+    //-----------------------------------------------------------------
+
+    //
+    //  setup () -- Routine to setup our display :
+    //
+    void setup ( void );
+
+    //
+    //  handle () -- Routine to check for updates to our display :
+    //
+    void handle ( void );
 
 }; // cMyDisplay_LCD2004
 

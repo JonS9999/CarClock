@@ -2,11 +2,15 @@
 //
 //  main.cpp
 //
-//      Version 1.4
+//      Version 1.5
 //
 //----------------------------------------------------------------------------
 //
 //  History :
+//
+//      Ver 1.5 : 2026/03/12
+//          - Modified cb_WiFi_NoUsableNetwork() callback to display the
+//            number of open networks we found.
 //
 //      Ver 1.4 : 2026/03/11
 //          - Changed display code so that cMyDisplay_LCD2004 is a derived
@@ -77,11 +81,6 @@
 //        - Possibly configure networks (that we search for) at runtime
 //          instead of at compile time (e.g., get rid of Secrets.cpp).
 //          Maybe use a web interface (WebIotConf perhaps?).
-//
-//        - Possibly attempt to connect to an open network if we cannot
-//          connect to any network in our list of networks (this might
-//          be useful when pulling into a truck stop or some place where
-//          they have free WiFi).
 //
 //        - Push button for control, for example :
 //              - Cycling through screens.
@@ -160,7 +159,6 @@
 //  Single instances of some objects :
 //
 //SimpleTimer     g_Timer;        // Timer for sending messages to the MQTT broker.
-//cMyDisplay      g_Display;      // One instance of the display object.
 cMyRTC          g_RTC;          // One instance of the Real Time Clock (RTC) object.
 cMyWiFi         g_WiFi;         // One instance of the WiFi object.
 SerialCommand   g_SerialCmd;    // Serial port command line interface.
@@ -222,13 +220,19 @@ void cb_TimeSyncEvent ()
 //
 //----------------------------------------------------------------------------
 
-void cb_WiFi_Connecting (   const int   index,              // Index into WiFi.RSSI(index).
-                            const char* ssid )
+void cb_WiFi_Connecting (   const char* SSID,
+                            const char* passwd )
 {
     //
     //  Local variables :
     //
     char    buf[80];                                // Temporary text buffer.
+
+
+    MyPrintf ( "[cb_WiFi_Connecting]  ------------------------------------------\n" );
+    MyPrintf ( "[cb_WiFi_Connecting]  Called : AP = [%s] / Type = [%s].\n",
+        SSID,
+        ( ( (passwd == NULL) || (strlen(passwd) == 0) ) ? "OPEN" : "SECURE" ) );
 
 
     //
@@ -238,17 +242,42 @@ void cb_WiFi_Connecting (   const int   index,              // Index into WiFi.R
     //                          "Trying open WiFi :",
     //                          "Trying secure WiFi :",
     snprintf ( buf, sizeof(buf), "Trying %s WiFi :",
-        ( (WiFi.encryptionType(index) == ENC_TYPE_NONE) ? "open" : "secure") );
-
-    MyPrintf ( "[cb_WiFi_Connecting]  ------------------------------------------\n" );
-    MyPrintf ( "[cb_WiFi_Connecting]  Called : Idx # %d / AP = [%s].\n", index, ssid );
+        ( ( (passwd == NULL) || (strlen(passwd) == 0) ) ? "open" : "secure" ) );
 
 
     //                           "--------------------"
     g_Display->DisplayMessage3 ( buf,                        // Row 0 (see above).
                                  "",                         // Row 1.
-                                 ssid,                       // Row 2 (SSID).
+                                 SSID,                       // Row 2 (SSID).
                                  false );                    // Do not force SSID to the bottom row.
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_ConnectingAttempt () -- Callback routine which is
+//              called when we are trying to connect to a WiFi network.
+//              We are passed in the maximum number of attempts that will
+//              be made and the number of attempts made so far.
+//
+//----------------------------------------------------------------------------
+
+void cb_WiFi_ConnectingAttempt (    const uint8_t   numAttemptsSoFar,
+                                    const uint8_t   maxAttempts )
+{
+    MyPrintf ( "[cb_WiFi_ConnectingAttempt]  Called : Attempt # %u of %u.\n",
+                numAttemptsSoFar,
+                maxAttempts );
+
+
+    //
+    //  Do we have a display callback that should be called ?
+    //
+    if ( g_Display != NULL )
+    {
+        MyPrintf ( "[cb_WiFi_ConnectingAttempt]  Calling g_Display->cb_WiFi_ConnectingAttempt()...\n" );
+        g_Display->cb_WiFi_ConnectingAttempt ( numAttemptsSoFar, maxAttempts );
+    }
 }
 
 
@@ -264,36 +293,25 @@ void cb_WiFi_Connecting (   const int   index,              // Index into WiFi.R
 //
 //----------------------------------------------------------------------------
 
-void cb_WiFi_NoUsableNetwork ( void )
+void cb_WiFi_NoUsableNetwork (  const uint8_t   numSecureNetworks,
+                                const uint8_t   numOpenNetworks )
 {
-    //
-    //  Local variables :
-    //
-    static bool     s_UpdateDisplay     = true;         // Used to track if we should update the display.
-
-
     //
     //  Always display the following :
     //
     MyPrintf ( "[cb_WiFi_NoUsableNetwork]  ------------------------------------------\n" );
-    MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Called : Update display = %s.\n", ( (s_UpdateDisplay == true) ? "TRUE" : "FALSE") );
+    MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Num secure = %u / Num open = %u.\n",
+                numSecureNetworks,
+                numOpenNetworks );
 
 
     //
-    //  Should we display a message on our display ?
+    //  Do we have a display callback that should be called ?
     //
-    if ( s_UpdateDisplay == true )
+    if ( g_Display != NULL )
     {
-        MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Displaying stuff on the display just this one time.\n" );
-
-        //                           "--------------------"
-        g_Display->DisplayMessage3 ( "No usable networks",
-                                     "found.",
-                                     "" );
-
-        delay ( 2000 );
-
-        s_UpdateDisplay = false;
+        MyPrintf ( "[cb_WiFi_NoUsableNetwork]  Calling g_Display->cb_WiFi_NoUsableNetwork()...\n" );
+        g_Display->cb_WiFi_NoUsableNetwork ( numSecureNetworks, numOpenNetworks );
     }
 }
 
@@ -452,6 +470,7 @@ void setup ( void )
     //
     g_WiFi.setup ();
     g_WiFi.SetCallback_Connecting                   ( cb_WiFi_Connecting );
+    g_WiFi.SetCallback_ConnectingAttempt            ( cb_WiFi_ConnectingAttempt );
     g_WiFi.SetCallback_NoUsableNetwork              ( cb_WiFi_NoUsableNetwork );
     g_WiFi.SetCallback_ScanningForNetworks          ( cb_WiFi_ScanningForNetworks );
     //g_WiFi.SetCallback_SearchingForOpenNetwork      ( cb_WiFi_SearchingForOpenNetwork );

@@ -2,7 +2,7 @@
 //
 //  MyDisplay_LCD2004.cpp -- Display driver for Hitachi 20x4 LCD display.
 //
-//      Version 1.1
+//      Version 1.2
 //
 //----------------------------------------------------------------------------
 //
@@ -142,19 +142,19 @@ static const byte SEGS[SEGS_SIZE][8] =
    0x1F},   // xxxxx
 
   //
-  //    0x02 : Top half of colon (:) :  *** Not used ***
+  //    0x02 : Backslash (need to do this since a normal backslash displays a Japanese Yen symbol).
   //
   {0x00,    // .....
+   0x10,    // x....
+   0x08,    // .x...
+   0x04,    // ..x..
+   0x02,    // ...x.
+   0x01,    // ....x
    0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x00,    // .....
-   0x18,    // xx...
-   0x18,    // xx...
    0x00},   // .....
 
   //
-  //    0x03 : Bottom half of colon (:) :  *** Not used ***
+  //    0x03 : *** Not used ***
   //
   {0x00,    // .....
    0x18,    // xx...
@@ -235,7 +235,7 @@ static const byte SEGS_ASCII[SEGS_SIZE+1] =
 {
     '-',    // Custom char 0x00 : Top bar - thick.
     '_',    // Custom char 0x01 : Bottom bar - thick
-    '-',    // Custom char 0x02 : (not used)
+    '\\',   // Custom char 0x02 : Backslash.
     '-',    // Custom char 0x03 : (not used)
     '-',    // Custom char 0x04 : (not used)
     '-',    // Custom char 0x05 : (not used)
@@ -1240,30 +1240,6 @@ void cMyDisplay_LCD2004::Print ( const uint8_t ch )
     //  Just call our Print_Delay() routine with the default delay value :
     //
     Print_Delay ( 20, ch );
-
-
-#if 0   // OLD CODE
-    //
-    //  Output the single character to the LCD :
-    //
-    if ( m_LcdIsPresent == true )
-    {
-        // m_LCD.print ( (char)ch );
-        m_LCD.write ( (char)ch );
-        delay ( 10 );
-    }
-
-
-    //
-    //  Save the character to the text "screen" :
-    //
-    if ( m_TextScreen_Posi_Col < LCD2004_COLS )
-    {
-        m_TextScreen[m_TextScreen_Posi_Row][m_TextScreen_Posi_Col] = ch;
-        m_TextScreen_Posi_Col++;
-    }
-#endif
-
 }
 
 
@@ -1334,7 +1310,7 @@ void cMyDisplay_LCD2004::SetCursor ( const uint16_t row, const uint16_t column )
     if ( m_LcdIsPresent == true )
     {
         m_LCD.setCursor ( column, row );
-        delay ( 12 );
+        delay ( 13 );
     }
 
 
@@ -1434,6 +1410,124 @@ void cMyDisplay_LCD2004::Write ( const char* text )
         m_TextScreen_Posi_Col++;
         ptr++;
     } // while
+}
+
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_ConnectingAttempt () -- Callback routine which is
+//      called when we are trying to connect to a WiFi network.
+//      We are passed in the maximum number of attempts that will
+//      be made and the number of attempts made so far.
+//
+//----------------------------------------------------------------------------
+
+void cMyDisplay_LCD2004::cb_WiFi_ConnectingAttempt (    const uint8_t   numAttemptsSoFar,
+                                                        const uint8_t   maxAttempts )
+{
+    //
+    //  Local variables :
+    //
+    static uint8_t  s_Index             = 0;        // Index into PROGRESS_CHAR[].
+
+    static const uint8_t    PROGRESS_CHAR[]     = { '|', '/', '-', 0x02 };      // For backslash, use our programmable character 0x02 (see SEGS[] above).
+//    static const uint8_t    PROGRESS_CHAR[]     = { '|', '/', '-', '\\' };    // FYI a backslash (\) displays a Japanese Yen symbol.
+
+    static const uint8_t    NUM_PROGRESS_CHARS  = ( sizeof(PROGRESS_CHAR) / sizeof (char) );
+
+
+    //
+    //  If this is the first time we're being called, then want to reset
+    //  our index :
+    //
+    if ( numAttemptsSoFar == 0 )
+    {
+        s_Index = 0;
+    }
+
+
+    //
+    //  Display some debugging information :
+    //
+    MyPrintf ( "[cMyDisplay_LCD2004::cb_WiFi_ConnectingAttempt]  Called : Attempt # %u of %u / Index = %u / Char = [%c].\n",
+                numAttemptsSoFar,
+                maxAttempts,
+                s_Index,
+                ( isprint(PROGRESS_CHAR[s_Index])  ? (const char)PROGRESS_CHAR[s_Index] :   // Printable character?
+                  ((PROGRESS_CHAR[s_Index] == 0x02) ? '\\' : '?') ) );                      // Backslash (programmable character 0x02)?
+
+
+    //
+    //  Each time we're called, we want to display an indicator in the
+    //  bottom right corner of the LCD2004 :
+    //
+    SetCursor ( (LCD_ROWS - 1), (LCD_COLS - 1) );
+    Write ( PROGRESS_CHAR[s_Index] );
+
+
+    //
+    //  Display the updated ASCII screen to the serial port :
+    //
+    TextScreen_Display ();
+
+
+    //
+    //  Increment our index so we
+    //
+    s_Index = ( (s_Index + 1) % NUM_PROGRESS_CHARS );
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  cb_WiFi_NoUsableNetwork () -- WiFi callback which is called when
+//              the WiFi module is not able to connect to any network.
+//
+//      Note that we only display something the first time we are called
+//      or if we tried at least one open network.
+//
+//----------------------------------------------------------------------------
+
+void cMyDisplay_LCD2004::cb_WiFi_NoUsableNetwork (  const uint8_t   numSecureNetworks,
+                                                    const uint8_t   numOpenNetworks )
+{
+    //
+    //  Local variables :
+    //
+    char            buf[40];                        // Temporary text buffer.
+    static bool     s_FirstTime     = true;         // Used to track the first time we're called.
+
+
+    //
+    //  Always display the following :
+    //
+    MyPrintf ( "[cMyDisplay_LCD2004::cb_WiFi_NoUsableNetwork]  ------------------------------------------\n" );
+    MyPrintf ( "[cMyDisplay_LCD2004::cb_WiFi_NoUsableNetwork]  Called : First time = %s / Num secure = %u / Num open = %u.\n",
+                ( (s_FirstTime == true) ? "TRUE" : "FALSE"),
+                numSecureNetworks,
+                numOpenNetworks );
+
+
+    //
+    //  Should we display a message on our display ?
+    //
+    if ( (s_FirstTime == true) || (numOpenNetworks > 0) )
+    {
+        snprintf ( buf, sizeof(buf), "%u open found.", numOpenNetworks );
+
+        MyPrintf ( "[cMyDisplay_LCD2004::cb_WiFi_NoUsableNetwork]  Displaying stuff on the display just this one time.\n" );
+
+        //                "--------------------"
+        DisplayMessage3 ( "No usable networks",
+                          "found.",
+                          buf,
+                          true );
+
+        delay ( 2000 );
+
+        s_FirstTime = false;
+    }
 }
 
 
@@ -1717,10 +1811,10 @@ void cMyDisplay_LCD2004::handle ( void )
             //  Now display the colon in two steps :
             //
             SetCursor ( 1, 9 );                 // Top part of the colon.
-            Print_Delay ( 5, colon_top );       // Use a shorter delay() than we normally use.
+            Print_Delay ( 7, colon_top );       // Use a shorter delay() than we normally use.
 
             SetCursor ( 2, 9 );                 // Bottom part of the colon.
-            Print_Delay ( 5, colon_bottom );    // Use a shorter delay() than we normally use.
+            Print_Delay ( 7, colon_bottom );    // Use a shorter delay() than we normally use.
 
             delay ( 10 );
 
