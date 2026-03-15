@@ -2,7 +2,7 @@
 //
 //  MyDisplay_LCD2004.cpp -- Display driver for Hitachi 20x4 LCD display.
 //
-//      Version 1.2
+//      Version 1.3
 //
 //----------------------------------------------------------------------------
 //
@@ -360,6 +360,7 @@ cMyDisplay_LCD2004::cMyDisplay_LCD2004 ( void )
     m_IsInitialized             = false;
     m_LcdIsPresent              = false;
     m_pSerialCmd                = nullptr;      // Pointer to optional SerialCmd object.
+    m_CommandDelay              = DEFAULT_COMMAND_DELAY;    // Default delay when printing or moving the cursor.
     m_DisplayingTime            = false;
     m_Seconds                   = 0;            // We keep track of the seconds.
     m_SecondsUpdateAt           = 0;            // When we should update the m_Seconds field.
@@ -1237,30 +1238,13 @@ void cMyDisplay_LCD2004::Print ( const char* text )
 void cMyDisplay_LCD2004::Print ( const uint8_t ch )
 {
     //
-    //  Just call our Print_Delay() routine with the default delay value :
-    //
-    Print_Delay ( 20, ch );
-}
-
-
-//----------------------------------------------------------------------------
-//
-//  Print_Delay () -- Display the user specified character on the LCD
-//                    using the user specified delay.
-//
-//----------------------------------------------------------------------------
-
-void cMyDisplay_LCD2004::Print_Delay (  const uint8_t delayValue,
-                                        const uint8_t ch )
-{
-    //
     //  Output the single character to the LCD :
     //
     if ( m_LcdIsPresent == true )
     {
         // m_LCD.print ( (char)ch );
         m_LCD.write ( (char)ch );
-        delay ( delayValue );
+        delay ( m_CommandDelay );
     }
 
 
@@ -1652,6 +1636,7 @@ void cMyDisplay_LCD2004::handle ( void )
     char            colon_top;                              // Top part of the colon.
     char            colon_bottom;                           // Bottom part of the colon.
     uint32_t        curMillis               = millis();
+    uint8_t         oldCommandDelay         = 0;            //
     static bool     s_ColonState            = false;
     static bool     s_OldDisplayingTime     = false;
     static uint32_t s_LastMillis            = 0;
@@ -1808,17 +1793,25 @@ void cMyDisplay_LCD2004::handle ( void )
             }
 
             //
-            //  Now display the colon in two steps :
+            //  Now display the colon in two steps -- note that
+            //  we override the default 'command delay' since we
+            //  want to display the colons quickly (unlike the
+            //  digits of the hours and minutes) :
             //
-            SetCursor ( 1, 9 );                 // Top part of the colon.
-            Print_Delay ( 7, colon_top );       // Use a shorter delay() than we normally use.
+            oldCommandDelay = SetCommandDelay ( 7 );        // Save the old delay + set the new delay.
 
-            SetCursor ( 2, 9 );                 // Bottom part of the colon.
-            Print_Delay ( 7, colon_bottom );    // Use a shorter delay() than we normally use.
+            SetCursor ( 1, 9 );                             // Top part of the colon.
+            Print ( colon_top );                            //
 
-            delay ( 10 );
+            SetCursor ( 2, 9 );                             // Bottom part of the colon.
+            Print ( colon_bottom );                         //
+
+            SetCommandDelay ( oldCommandDelay );            // Restore the old delay.
+
+            delay ( 10 );                                   // Another delay() just for good measure.
 
             debug_DisplayTextScreen = true;
+
         } // if
     }
 

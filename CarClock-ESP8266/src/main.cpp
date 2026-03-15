@@ -2,11 +2,18 @@
 //
 //  main.cpp
 //
-//      Version 1.5
+//      Version 1.6
 //
 //----------------------------------------------------------------------------
 //
 //  History :
+//
+//      Ver 1.6 : 2026/03/14
+//          - Added inline routines GetCommandDelay() and SetCommandDelay()
+//            to MyDisplay_LCD2004.h to allow the user to change the default
+//            delay() value when sending commands to the LCD.
+//          - Got rid of Print_Delay() (in MyDisplay_LCD2004.*) since we
+//            now can use the new Get/SetCommandDelay() routines.
 //
 //      Ver 1.5 : 2026/03/12
 //          - Modified cb_WiFi_NoUsableNetwork() callback to display the

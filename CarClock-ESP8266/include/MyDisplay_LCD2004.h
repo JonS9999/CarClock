@@ -6,7 +6,7 @@
 //
 //    Jon Scheer (2026)
 //
-//    Rev 1.2
+//    Rev 1.3
 //
 //----------------------------------------------------------------------------
 
@@ -47,8 +47,10 @@
 //
 //-----------------------------------------------------------------------------
 
-const uint8_t   LCD2004_COLS    = (20);
-const uint8_t   LCD2004_ROWS    = (4);
+const uint8_t   LCD2004_COLS            = 20;
+const uint8_t   LCD2004_ROWS            = 4;
+
+const uint8_t   DEFAULT_COMMAND_DELAY   = 20;     // Number of msecs to delay() when driving the LCD.
 
 
 //-----------------------------------------------------------------------------
@@ -72,6 +74,15 @@ class cMyDisplay_LCD2004 : public cMyDisplay
     //  m_SerialCmd -- Pointer to an optional SerialCommand object.
     //
     SerialCommand *m_pSerialCmd;
+
+    //
+    //  m_CommandDelay -- Used with a delay() command after printing a character
+    //                    or moving the cursor.  We need a delay so we don't
+    //                    send commands to the LCD too quickly (if we send stuff
+    //                    to the LCD too quickly, the ccommands will be dropped
+    //                    and the LCD won't behave like we expect).
+    //
+    uint m_CommandDelay;
 
     //
     //  m_DisplayingTime -- Flag used to determine if we are displaying the time.
@@ -154,7 +165,7 @@ class cMyDisplay_LCD2004 : public cMyDisplay
     //  Print_Delay () -- Display the user specified character on the
     //                    LCD using the user specified delay :
     //
-    void Print_Delay ( const uint8_t delayValue, const uint8_t ch );
+    // void Print_Delay ( const uint8_t delayValue, const uint8_t ch );
 
 
     //-----------------------------------------------------------------
@@ -279,6 +290,39 @@ class cMyDisplay_LCD2004 : public cMyDisplay
     //  handle () -- Routine to check for updates to our display :
     //
     void handle ( void );
+
+
+    //-----------------------------------------------------------------
+    //
+    //  Inline functions
+    //
+    //-----------------------------------------------------------------
+
+    //
+    //  GetCommandDelay () -- Return the current 'command delay' value :
+    //
+    inline const uint8_t GetCommandDelay ( void )
+    {
+      return ( (const uint8_t)m_CommandDelay );
+    }
+
+    //
+    //  SetCommandDelay () -- Sets the 'command delay' value to the
+    //      user specified command delay value.  Note that we return
+    //      the old command delay value so the user can change the
+    //      command delay value then return it to the previous command
+    //      delay value.
+    //
+    inline const uint8_t SetCommandDelay ( const uint8_t commandDelay )
+    {
+      const uint8_t oldCommandDelay = m_CommandDelay;
+
+      m_CommandDelay = commandDelay;
+
+      return ( oldCommandDelay );
+    }
+
+
 
 }; // cMyDisplay_LCD2004
 
